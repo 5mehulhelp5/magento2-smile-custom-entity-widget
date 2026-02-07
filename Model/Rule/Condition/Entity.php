@@ -10,40 +10,38 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
 
-use Magento\Framework\Api\SearchCriteriaBuilder;
-use Magento\Framework\ObjectManager\ResetAfterRequestInterface;
-use Magento\Framework\Locale\FormatInterface;
 use Magento\Backend\Helper\Data as BackendData;
-use Magento\Catalog\Api\Data\ProductInterface;
-use Magento\Catalog\Model\ProductCategoryList;
-use Magento\Catalog\Model\ResourceModel\Product\Collection;
-use Magento\Catalog\Model\ProductFactory;
 use Magento\Catalog\Api\ProductRepositoryInterface;
+use Magento\Catalog\Model\ProductCategoryList;
+use Magento\Catalog\Model\ProductFactory;
 use Magento\Catalog\Model\ResourceModel\Product as ProductResource;
+use Magento\Catalog\Model\ResourceModel\Product\Collection;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
 use Magento\Eav\Model\Entity\Attribute\Source\Table as TableSource;
 use Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\Collection as AttributeSetCollection;
+use Magento\Framework\Api\FilterBuilder;
+use Magento\Framework\Api\SearchCriteriaBuilder;
+use Magento\Framework\Locale\FormatInterface;
+use Magento\Framework\ObjectManager\ResetAfterRequestInterface;
 use Magento\Rule\Model\Condition\Context;
 use Magento\Rule\Model\Condition\Product\AbstractProduct;
 use Magento\Store\Model\StoreManagerInterface;
-use Magento\Store\Model\Store;
-use Smile\ScopedEav\Api\Data\EntityInterface;
-use Smile\CustomEntity\Api\Data\CustomEntityInterface;
-use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
-use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
 use Psr\Log\LoggerInterface;
+use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
+use Smile\CustomEntity\Api\Data\CustomEntityInterface;
+use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
+use Smile\ScopedEav\Api\Data\EntityInterface;
 
 /**
- * Rule smile custom entity condition data model
+ * Rule smile custom entity condition data model.
  *
- * This class handles custom entity conditions for Magento rule processing.
- * It supports filtering entities based on various attribute types and conditions.
+ * Handles mapping of Rule Conditions to SearchCriteria filters for Smile Custom Entities.
  */
 class Entity extends AbstractProduct implements ResetAfterRequestInterface
 {
     /**
-     * {@inheritdoc}
+     * @var string
      */
     protected $elementName = 'parameters';
 
@@ -53,17 +51,9 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     protected array $joinedAttributes = [];
 
     /**
-     * @var StoreManagerInterface
-     */
-    protected StoreManagerInterface $storeManager;
-
-    /**
-     * @var LoggerInterface
-     */
-    private LoggerInterface $logger;
-
-    /**
-     * @var array List of attribute codes to exclude from condition options
+     * List of attribute codes to exclude from condition options.
+     *
+     * @var string[]
      */
     private array $excludeAttributes = [
         CustomEntityInterface::URL_KEY,
@@ -71,25 +61,19 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     ];
 
     /**
-     * @var array|null Cache for custom entity attributes
-     */
-    private static ?array $customEntityAttributes = null;
-
-    /**
-     * Constructor
-     *
-     * @param Context $context Rule condition context
-     * @param BackendData $backendData Backend helper data
-     * @param EavConfig $config EAV configuration
-     * @param ProductFactory $productFactory Product factory
-     * @param ProductRepositoryInterface $productRepository Product repository
-     * @param ProductResource $productResource Product resource model
-     * @param AttributeSetCollection $attrSetCollection Attribute set collection
-     * @param FormatInterface $localeFormat Locale format interface
-     * @param StoreManagerInterface $storeManager Store manager
-     * @param LoggerInterface $logger PSR logger
-     * @param array $data Additional data
-     * @param ProductCategoryList|null $categoryList Product category list
+     * @param Context $context
+     * @param BackendData $backendData
+     * @param EavConfig $config
+     * @param ProductFactory $productFactory
+     * @param ProductRepositoryInterface $productRepository
+     * @param ProductResource $productResource
+     * @param AttributeSetCollection $attrSetCollection
+     * @param FormatInterface $localeFormat
+     * @param StoreManagerInterface $storeManager
+     * @param LoggerInterface $logger
+     * @param FilterBuilder $filterBuilder
+     * @param array $data
+     * @param ProductCategoryList|null $categoryList
      */
     public function __construct(
         Context $context,
@@ -100,8 +84,9 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
         ProductResource $productResource,
         AttributeSetCollection $attrSetCollection,
         FormatInterface $localeFormat,
-        StoreManagerInterface $storeManager,
-        LoggerInterface $logger,
+        protected readonly StoreManagerInterface $storeManager,
+        protected readonly LoggerInterface $logger,
+        protected readonly FilterBuilder $filterBuilder,
         array $data = [],
         ?ProductCategoryList $categoryList = null
     ) {
@@ -117,15 +102,10 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
             $data,
             $categoryList
         );
-
-        $this->storeManager = $storeManager;
-        $this->logger = $logger;
     }
 
     /**
-     * Default operator input by type map getter
-     *
-     * @return array<string, string[]>
+     * {@inheritdoc}
      */
     public function getDefaultOperatorInputByType()
     {
@@ -141,60 +121,51 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
                 'multiselect' => ['()', '!()']
             ];
 
-            $this->_arrayInputTypes[] = 'multiselect'; // Ensure multiselect is treated as array type
+            // Ensure multiselect is treated as an array input type by the UI
+            $this->_arrayInputTypes[] = 'multiselect';
         }
 
         return $this->_defaultOperatorInputByType;
     }
 
     /**
-     * Retrieve attribute object
+     * Retrieve attribute object.
      *
-     * Override to intercept attributes and force source model if needed.
-     * Return null on failure instead of DataObject.
+     * Overridden to handle CustomEntity Attributes and fix missing source models.
      *
      * @return AbstractAttribute|CustomEntityAttribute|null
      */
     public function getAttributeObject()
     {
         $code = $this->getAttribute();
-        $attribute = null;
-
+        
         try {
-            $attribute = $this->_config->getAttribute(CustomEntityAttributeInterface::ENTITY_TYPE_CODE, $code);
+            $attribute = $this->_config->getAttribute(
+                CustomEntityAttributeInterface::ENTITY_TYPE_CODE,
+                $code
+            );
 
-            // Bugfix: Ensure multiselect attributes have a source model
-            if ($attribute->getFrontendInput() == 'multiselect' && !$attribute->getData('source_model')) {
+            // Fix: Ensure multiselect attributes have a source model for option retrieval
+            if ($attribute->getFrontendInput() === 'multiselect' && !$attribute->getData('source_model')) {
                 $attribute->setData('source_model', TableSource::class);
             }
+
+            return $attribute;
         } catch (\Exception $e) {
-            $this->logger->error('Error loading attribute: ' . $e->getMessage(), [
-                'attribute_code' => $code,
-                'entity_type' => CustomEntityAttributeInterface::ENTITY_TYPE_CODE
-            ]);
+            $this->logger->error(
+                sprintf('CustomEntityWidget: Error loading attribute "%s". %s', $code, $e->getMessage())
+            );
         }
 
-        return $attribute;
+        return null;
     }
 
     /**
-     * Add special attributes to the attribute list
-     *
-     * @param array<string, string> &$attributes Attributes array to modify
-     * @return void
-     */
-    protected function _addSpecialAttributes(array &$attributes): void
-    {
-        $attributes['entity_id'] = __('Entity ID');
-        $attributes['has_image'] = __('Entity has image');
-    }
-
-    /**
-     * Load attribute options for the condition
+     * Load attribute options for the condition dropdown.
      *
      * @return $this
      */
-    public function loadAttributeOptions()
+    public function loadAttributeOptions(): self
     {
         $attributeList = $this->_config->getEntityType(CustomEntityAttributeInterface::ENTITY_TYPE_CODE)
             ->getAttributeCollection()
@@ -204,10 +175,13 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
         $attributes = [];
         $this->_addSpecialAttributes($attributes);
 
-        /** @var AbstractAttribute|CustomEntityAttribute $attribute */
+        /** @var AbstractAttribute $attribute */
         foreach ($attributeList as $attribute) {
-            $label = sprintf('%s (%s)', $attribute->getFrontendLabel(), $attribute->getAttributeCode());
-            $attributes[$attribute->getAttributeCode()] = $label;
+            $attributes[$attribute->getAttributeCode()] = sprintf(
+                '%s (%s)',
+                $attribute->getFrontendLabel(),
+                $attribute->getAttributeCode()
+            );
         }
 
         asort($attributes);
@@ -217,9 +191,20 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     }
 
     /**
-     * Add condition to collection
+     * Collect validated attributes for SearchCriteriaBuilder.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder Search criteria builder
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @return $this
+     */
+    public function collectValidatedAttributes($searchCriteriaBuilder): self
+    {
+        return $this->addToCollection($searchCriteriaBuilder);
+    }
+
+    /**
+     * Add condition to SearchCriteriaBuilder.
+     *
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @return $this
      */
     public function addToCollection(SearchCriteriaBuilder $searchCriteriaBuilder): self
@@ -227,66 +212,176 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
         $code = $this->getAttribute();
         $attribute = $this->getAttributeObject();
 
-        if (!$code || !$attribute) {
+        if (!$code) {
             return $this;
         }
-
-        $conditionValue = $this->getValueParsed();
-        $operatorType = $this->getOperatorType();
 
         if ($code === 'has_image') {
-            $filterValue = ($conditionValue == 1);
+            return $this->applyHasImageFilter($searchCriteriaBuilder);
+        }
 
-            $searchCriteriaBuilder->addFilter(
-                EntityInterface::IMAGE,
-                $filterValue,
-                $filterValue ? 'notnull' : 'null'
-            );
-
+        if (!$attribute) {
             return $this;
         }
 
-        /*
-         * Ensure value is suitable for the operator.
-         * E.g., 'in' and 'nin' require arrays.
-         */
-        if (in_array($operatorType, ['in', 'nin']) && !is_array($conditionValue)) {
-            $conditionValue = array_filter(array_map('trim', explode(',', (string)$conditionValue)));
-            if (empty($conditionValue)) {
-                return $this;
-            }
-        } elseif (is_array($conditionValue) && !in_array($operatorType, ['in', 'nin'])) {
-            $conditionValue = reset($conditionValue);
+        $value = $this->getValueParsed();
+        $operator = $this->getOperatorType();
+
+        // Normalize value based on operator expectations
+        $value = $this->normalizeConditionValue($value, $operator, $attribute);
+        
+        // Skip empty values
+        if ($value === null || $value === '' || $value === []) {
+            return $this;
         }
 
-        /**
-         * Convert attribute values to integers for select/multiselect attributes.
-         * This is crucial because the filter will not work for these attribute types
-         */
-        if ($attribute instanceof AbstractAttribute || $attribute instanceof CustomEntityAttribute) {
-            $frontendInput = $attribute->getFrontendInput();
-            if (in_array($frontendInput, ['select', 'multiselect']) && is_array($conditionValue)) {
-                $conditionValue = array_map('intval', $conditionValue);
-            }
-        }
-
-        $filterValue = $conditionValue;
-        if (in_array($operatorType, ['like', 'nlike']) && is_string($filterValue)) {
-            $filterValue = str_replace(['%', '_'], ['\%', '\_'], $filterValue);
-            $filterValue = '%' . $filterValue . '%';
-        }
-
-        if ($filterValue !== null && $filterValue !== '' && $filterValue !== []) {
-            $searchCriteriaBuilder->addFilter($code, $filterValue, $operatorType);
+        // Dispatch specific filter logic
+        if ($attribute->getFrontendInput() === 'multiselect') {
+            $this->applyMultiselectFilter($searchCriteriaBuilder, $code, $value, $operator);
+        } else {
+            $this->applyStandardFilter($searchCriteriaBuilder, $code, $value, $operator);
         }
 
         return $this;
     }
 
     /**
-     * Get the condition type for SearchCriteriaBuilder based on the operator.
+     * Apply filter for the virtual 'has_image' attribute.
      *
-     * @return string A condition type compatible with SearchCriteriaBuilder::addFilter
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @return $this
+     */
+    private function applyHasImageFilter(SearchCriteriaBuilder $searchCriteriaBuilder): self
+    {
+        $value = (bool) $this->getValueParsed();
+        
+        $searchCriteriaBuilder->addFilter(
+            EntityInterface::IMAGE,
+            $value,
+            $value ? 'notnull' : 'null'
+        );
+
+        return $this;
+    }
+
+    /**
+     * Apply specialized filtering logic for Multiselect attributes.
+     *
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param string $code
+     * @param mixed $value
+     * @param string $operator
+     * @return void
+     */
+    private function applyMultiselectFilter(
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        string $code,
+        mixed $value,
+        string $operator
+    ): void {
+        // Case: "Is one of" (IN) -> Logic: (Contains A) OR (Contains B)
+        if ($operator === 'in' && is_array($value)) {
+            $filters = [];
+            foreach ($value as $item) {
+                $filters[] = $this->filterBuilder
+                    ->setField($code)
+                    ->setConditionType('finset')
+                    ->setValue($item)
+                    ->create();
+            }
+            // addFilters (plural) creates an OR group
+            if (!empty($filters)) {
+                $searchCriteriaBuilder->addFilters($filters);
+            }
+            return;
+        }
+
+        // Case: "Is NOT one of" (NIN) -> Logic: (Not Contains A) AND (Not Contains B)
+        if ($operator === 'nin' && is_array($value)) {
+            foreach ($value as $item) {
+                // nfinset is supported by standard Magento Collection Processors
+                $searchCriteriaBuilder->addFilter($code, $item, 'nfinset');
+            }
+            return;
+        }
+
+        // Fallback for single values or other operators
+        $conditionType = match ($operator) {
+            'eq' => 'finset',
+            'neq' => 'nfinset',
+            default => $operator
+        };
+
+        $searchCriteriaBuilder->addFilter($code, $value, $conditionType);
+    }
+
+    /**
+     * Apply standard filtering logic.
+     *
+     * @param SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param string $code
+     * @param mixed $value
+     * @param string $operator
+     * @return void
+     */
+    private function applyStandardFilter(
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        string $code,
+        mixed $value,
+        string $operator
+    ): void {
+        // Handle LIKE operator escaping
+        if (in_array($operator, ['like', 'nlike']) && is_string($value)) {
+            $value = str_replace(['%', '_'], ['\%', '\_'], $value);
+            $value = '%' . $value . '%';
+        }
+
+        $searchCriteriaBuilder->addFilter($code, $value, $operator);
+    }
+
+    /**
+     * Normalize the condition value based on the operator and attribute type.
+     *
+     * @param mixed $value
+     * @param string $operator
+     * @param AbstractAttribute|CustomEntityAttribute $attribute
+     * @return mixed
+     */
+    private function normalizeConditionValue(
+        mixed $value,
+        string $operator,
+        AbstractAttribute|CustomEntityAttribute $attribute
+    ): mixed {
+        // Convert comma-separated strings to arrays for array-based operators
+        if (in_array($operator, ['in', 'nin']) && !is_array($value)) {
+            $value = array_filter(array_map('trim', explode(',', (string)$value)));
+            if (empty($value)) {
+                return null;
+            }
+        }
+        
+        // Flatten array if operator expects a scalar
+        if (is_array($value) && !in_array($operator, ['in', 'nin'])) {
+            $value = reset($value);
+        }
+
+        // Cast to int for numeric identifiers in select/multiselect
+        $frontendInput = $attribute->getFrontendInput();
+        if (in_array($frontendInput, ['select', 'multiselect'])) {
+            if (is_array($value)) {
+                $value = array_map('intval', $value);
+            } elseif (is_numeric($value)) {
+                $value = (int) $value;
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * Get the condition type map for SearchCriteriaBuilder.
+     *
+     * @return string
      */
     public function getOperatorType(): string
     {
@@ -306,18 +401,19 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     }
 
     /**
-     * Collect validated attributes for SearchCriteriaBuilder
+     * Add special attributes to the attribute list.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder Search criteria builder
-     * @return $this
+     * @param array &$attributes
+     * @return void
      */
-    public function collectValidatedAttributes($searchCriteriaBuilder)
+    protected function _addSpecialAttributes(array &$attributes): void
     {
-        return $this->addToCollection($searchCriteriaBuilder);
+        $attributes['entity_id'] = __('Entity ID');
+        $attributes['has_image'] = __('Entity has image');
     }
 
     /**
-     * Retrieve input type for attribute
+     * Retrieve input type for attribute.
      *
      * @return string
      */
@@ -326,15 +422,16 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
         if ($this->getAttribute() === 'has_image') {
             return 'select';
         }
+        
         if (!is_object($this->getAttributeObject())) {
             return 'string';
         }
+
         if ($this->getAttribute() === 'entity_id') {
             return 'string';
         }
 
-        $frontendInput = $this->getAttributeObject()->getFrontendInput();
-        return match ($frontendInput) {
+        return match ($this->getAttributeObject()->getFrontendInput()) {
             'select' => 'select',
             'multiselect' => 'multiselect',
             'date' => 'date',
@@ -344,7 +441,7 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     }
 
     /**
-     * Retrieve value element type
+     * Retrieve value element type.
      *
      * @return string
      */
@@ -353,15 +450,16 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
         if ($this->getAttribute() === 'has_image') {
             return 'select';
         }
+
         if (!is_object($this->getAttributeObject())) {
             return 'text';
         }
+
         if ($this->getAttribute() === 'entity_id') {
             return 'text';
         }
 
-        $frontendInput = $this->getAttributeObject()->getFrontendInput();
-        return match ($frontendInput) {
+        return match ($this->getAttributeObject()->getFrontendInput()) {
             'select', 'boolean' => 'select',
             'multiselect' => 'multiselect',
             'date' => 'date',
@@ -370,42 +468,28 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     }
 
     /**
-     * Prepares values options to be used as select options or hashed array
-     *
-     * Result is stored in following keys:
-     *  'value_select_options' - normal select array: array(array('value' => $value, 'label' => $label), ...)
-     *  'value_option' - hashed array: array($value => $label, ...),
+     * Prepares value options to be used as select options or hashed array.
      *
      * @return $this
      */
     protected function _prepareValueOptions(): self
     {
-        // Check that both keys exist. Maybe somehow only one was set not in this routine, but externally.
-        $selectReady = $this->getData('value_select_options');
-        $hashedReady = $this->getData('value_option');
-        if ($selectReady && $hashedReady) {
+        // Return early if options are already set
+        if ($this->getData('value_select_options') && $this->getData('value_option')) {
             return $this;
         }
 
         $selectOptions = null;
+
         if ($this->getAttribute() === 'has_image') {
             $selectOptions = [
                 ['value' => 0, 'label' => __('No')],
                 ['value' => 1, 'label' => __('Yes')]
             ];
-
-            $this->setData('value_select_options', $selectOptions);
-            $this->setData('value_option', array_column($selectOptions, 'label', 'value'));
-
-            return $this;
         } elseif (is_object($this->getAttributeObject())) {
             $attributeObject = $this->getAttributeObject();
             if ($attributeObject->usesSource()) {
-                if ($attributeObject->getFrontendInput() == 'multiselect') {
-                    $addEmptyOption = false;
-                } else {
-                    $addEmptyOption = true;
-                }
+                $addEmptyOption = $attributeObject->getFrontendInput() !== 'multiselect';
                 $source = $attributeObject->getSource();
                 if ($source) {
                     $selectOptions = $source->getAllOptions($addEmptyOption, true);
@@ -413,13 +497,17 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
             }
         }
 
-        $this->_setSelectOptions($selectOptions, $selectReady, $hashedReady);
+        $this->setData('value_select_options', $selectOptions);
+        
+        if ($selectOptions) {
+            $this->setData('value_option', array_column($selectOptions, 'label', 'value'));
+        }
 
         return $this;
     }
 
     /**
-     * Reset internal state after request
+     * Reset internal state after request.
      *
      * @return void
      */
