@@ -1,4 +1,4 @@
-# Artbambou SmileCustomEntityWidget Module for Magento 2
+# SmileCustomEntityWidget for Magento 2
 
 [![Latest Stable Version](https://img.shields.io/github/v/release/iparmentier/magento2-smile-custom-entity-widget)](https://github.com/iparmentier/magento2-smile-custom-entity-widget/releases)
 [![Magento 2](https://img.shields.io/badge/Magento-2.4.x-brightgreen.svg)](https://magento.com)
