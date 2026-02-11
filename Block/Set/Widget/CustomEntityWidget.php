@@ -195,46 +195,52 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
      */
     public function getEntities(): array
     {
-        if ($this->entities === null) {
-            /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
-            $searchCriteriaBuilder = $this->searchCriteriaBuilderFactory->create();
+        if ($this->entities !== null) {
+            return $this->entities;
+        }
+        
+        $attributeSet = $this->getAttributeSet();
+        if ($attributeSet === null) {
+            $this->entities = [];
+            return $this->entities;
+        }
 
-            $searchCriteriaBuilder->addFilter(
-                'attribute_set_id',
-                $this->getAttributeSet()->getAttributeSetId()
-            );
+        /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
+        $searchCriteriaBuilder = $this->searchCriteriaBuilderFactory->create();
 
-            $searchCriteriaBuilder->addFilter('is_active', true);
+        $searchCriteriaBuilder->addFilter(
+            'attribute_set_id',
+            $attributeSet->getAttributeSetId()
+        );
 
-            $conditions = $this->getConditions();
-            $conditions->collectValidatedAttributes($searchCriteriaBuilder);
+        $searchCriteriaBuilder->addFilter('is_active', true);
 
-            $sortOrder = $this->sortOrderBuilder
-                ->setField($this->getSortBy())
-                ->setDirection($this->getSortDirection())
-                ->create();
-            $searchCriteriaBuilder->setSortOrders([$sortOrder]);
+        $conditions = $this->getConditions();
+        $conditions->collectValidatedAttributes($searchCriteriaBuilder);
 
-            if ($this->showPager()) {
-                $pager = $this->getPager();
+        $sortOrder = $this->sortOrderBuilder
+            ->setField($this->getSortBy())
+            ->setDirection($this->getSortDirection())
+            ->create();
+        $searchCriteriaBuilder->setSortOrders([$sortOrder]);
 
-                if ($pager !== null) {
-                    $pager->addCriteria($searchCriteriaBuilder);
-                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
-                    $pager->setSearchResult($searchResult);
-                } else {
-                    $searchCriteriaBuilder->setPageSize($this->getItemsCount());
-                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
-                }
+        if ($this->showPager()) {
+            $pager = $this->getPager();
+
+            if ($pager !== null) {
+                $pager->addCriteria($searchCriteriaBuilder);
+                $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+                $pager->setSearchResult($searchResult);
             } else {
                 $searchCriteriaBuilder->setPageSize($this->getItemsCount());
                 $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
             }
-
-            $this->entities = $searchResult->getItems();
+        } else {
+            $searchCriteriaBuilder->setPageSize($this->getItemsCount());
+            $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
         }
 
-        return $this->entities;
+        $this->entities = $searchResult->getItems();
     }
 
     /**
@@ -593,7 +599,8 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
             }
         }
 
-        if ($attributeSet = $this->getAttributeSet()) {
+        $attributeSet = $this->getAttributeSet();
+        if ($attributeSet !== null) {
             $identities[] = CustomEntity::CACHE_CUSTOM_ENTITY_SET_TAG . '_' . $attributeSet->getAttributeSetId();
         }
 
