@@ -10,58 +10,58 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Block\Set\Widget;
 
-use Magento\Framework\View\Element\Template;
+use Artbambou\SmileCustomEntityWidget\Model\Config\Source\SortBy;
+use Artbambou\SmileCustomEntityWidget\Model\Rule;
 use Magento\Framework\Api\SearchCriteriaBuilderFactory;
 use Magento\Framework\Api\SortOrder;
 use Magento\Framework\Api\SortOrderBuilder;
 use Magento\Framework\App\ObjectManager;
-use Magento\Framework\Serialize\Serializer\Json;
-use Magento\Widget\Block\BlockInterface;
+use Magento\Framework\Serialize\SerializerInterface;
+use Magento\Framework\View\Element\Template;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Eav\Api\AttributeSetRepositoryInterface;
 use Magento\Eav\Api\Data\AttributeSetInterface;
-use Artbambou\SmileCustomEntityWidget\Model\Rule;
+use Magento\Widget\Block\BlockInterface;
 use Magento\Widget\Helper\Conditions;
 use Smile\CustomEntity\Api\CustomEntityRepositoryInterface;
 use Smile\CustomEntity\Api\Data\CustomEntityInterface;
 use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Block\CustomEntity\ImageFactory;
 use Smile\CustomEntity\Model\CustomEntity;
-use Artbambou\SmileCustomEntityWidget\Model\Config\Source\SortBy;
 
 class CustomEntityWidget extends Template implements BlockInterface
 {
     /**
      * Default imge width in pixel
      */
-    const DEFAULT_IMAGE_WIDTH = 200;
+    public const int DEFAULT_IMAGE_WIDTH = 200;
 
     /**
      * Default image height in pixel
      */
-    const DEFAULT_IMAGE_HEIGHT = 200;
+    public const int DEFAULT_IMAGE_HEIGHT = 200;
 
     /**
      * Default value for products count that will be shown
      */
-    const DEFAULT_ITEMS_COUNT = 8;
+    public const int DEFAULT_ITEMS_COUNT = 8;
 
     /**
      * Name of request parameter for page number value
      *
      * @deprecated @see $this->getData('page_var_name')
      */
-    const PAGE_VAR_NAME = 'sp';
+    public const string PAGE_VAR_NAME = 'sp';
 
     /**
      * Default value for products per page
      */
-    const DEFAULT_ITEMS_PER_PAGE = 4;
+    public const int DEFAULT_ITEMS_PER_PAGE = 4;
 
     /**
      * Default value whether show pager or not
      */
-    const DEFAULT_SHOW_PAGER = false;
+    public const bool DEFAULT_SHOW_PAGER = false;
 
     /**
      * Instance of pager block
@@ -69,46 +69,6 @@ class CustomEntityWidget extends Template implements BlockInterface
      * @var Pager
      */
     protected $pager;
-
-    /**
-     * @var AttributeSetRepositoryInterface
-     */
-    private $attributeSetRepository;
-
-    /**
-     * @var CustomEntityRepositoryInterface
-     */
-    private $customEntityRepository;
-
-    /**
-     * @var EavConfig
-     */
-    private $eavConfig;
-
-    /**
-     * @var SearchCriteriaBuilderFactory
-     */
-    private $searchCriteriaBuilderFactory;
-
-    /**
-     * @var SortOrderBuilder
-     */
-    private $sortOrderBuilder;
-
-    /**
-     * @var Rule
-     */
-    protected $rule;
-
-    /**
-     * @var Conditions
-     */
-    protected $conditionsHelper;
-
-    /**
-     * @var ImageFactory
-     */
-    private $imageFactory;
 
     /**
      * @var AttributeSetInterface $attributeSet
@@ -121,13 +81,6 @@ class CustomEntityWidget extends Template implements BlockInterface
     private $entities;
 
     /**
-     * Json Serializer Instance
-     *
-     * @var Json
-     */
-    private $serializer;
-
-    /**
      * View constructor.
      *
      * @param Template\Context $context
@@ -135,35 +88,26 @@ class CustomEntityWidget extends Template implements BlockInterface
      * @param CustomEntityRepositoryInterface $customEntityRepository
      * @param EavConfig $eavConfig
      * @param SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory
-     * @param SortOrderBuilder|null $sortOrderBuilder
+     * @param SortOrderBuilder $sortOrderBuilder
      * @param Rule $rule
      * @param Conditions $conditionsHelper
      * @param ImageFactory $imageFactory
+	 * @param SerializerInterface $serializer
      * @param array $data
      */
     public function __construct(
         Template\Context $context,
-        AttributeSetRepositoryInterface $attributeSetRepository,
-        CustomEntityRepositoryInterface $customEntityRepository,
-        EavConfig $eavConfig,
-        SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory,
-        SortOrderBuilder $sortOrderBuilder,
-        Rule $rule,
-        Conditions $conditionsHelper,
-        ImageFactory $imageFactory,
-        array $data = [],
-        Json $serializer = null
+        protected readonly AttributeSetRepositoryInterface $attributeSetRepository,
+        protected readonly CustomEntityRepositoryInterface $customEntityRepository,
+        protected readonly EavConfig $eavConfig,
+        protected readonly SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory,
+        protected readonly SortOrderBuilder $sortOrderBuilder,
+        protected readonly Rule $rule,
+        protected readonly Conditions $conditionsHelper,
+        protected readonly ImageFactory $imageFactory,
+        protected readonly SerializerInterface $serializer,
+        array $data = []
     ) {
-        $this->attributeSetRepository = $attributeSetRepository;
-        $this->customEntityRepository = $customEntityRepository;
-        $this->eavConfig = $eavConfig;
-        $this->searchCriteriaBuilderFactory = $searchCriteriaBuilderFactory;
-        $this->sortOrderBuilder = $sortOrderBuilder;
-        $this->rule = $rule;
-        $this->conditionsHelper = $conditionsHelper;
-        $this->imageFactory = $imageFactory;
-        $this->serializer = $serializer ?: ObjectManager::getInstance()->get(Json::class);
-
         parent::__construct($context, $data);
     }
 
@@ -543,21 +487,21 @@ class CustomEntityWidget extends Template implements BlockInterface
      *
      * @return array
      */
-    public function getIdentities()
-    {
-        $identities = [];
-        if ($this->getEntities()) {
-            foreach ($this->getEntities() as $entity) {
-                $identities[] = $entity->getIdentities();
-            }
-        }
-
-        if ($attributeSet = $this->getAttributeSet()) {
-            $identities[] = CustomEntity::CACHE_CUSTOM_ENTITY_SET_TAG . '_' . $attributeSet->getAttributeSetId();
-        }
-
-        return $identities;
-    }
+    public function getIdentities(): array
+	{
+	    $identities = [];
+	    if ($this->getEntities()) {
+	        foreach ($this->getEntities() as $entity) {
+	            $identities = array_merge($identities, $entity->getIdentities());
+	        }
+	    }
+	
+	    if ($attributeSet = $this->getAttributeSet()) {
+	        $identities[] = CustomEntity::CACHE_CUSTOM_ENTITY_SET_TAG . '_' . $attributeSet->getAttributeSetId();
+	    }
+	
+	    return array_unique($identities);
+	}
 
     /**
      * Get widget block name
