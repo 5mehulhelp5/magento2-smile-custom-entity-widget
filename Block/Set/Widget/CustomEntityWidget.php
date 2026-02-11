@@ -148,6 +148,10 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
             ? $this->getData('conditions')
             : $this->getData('conditions_encoded');
 
+        if (is_array($conditions)) {
+            $conditions = $this->serializer->serialize($conditions);
+        }
+
         return [
             'AB_CUSTOM_ENTITY_WIDGET',
             $this->_storeManager->getStore()->getId(),
@@ -159,7 +163,9 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
             $this->getItemsPerPage(),
             $this->getItemsCount(),
             $conditions,
-            $this->serializer->serialize($this->getRequest()->getParams()),
+            $this->serializer->serialize([
+                $this->getPageVarName() => $this->getRequest()->getParam($this->getPageVarName())
+            ]),
             $this->getTemplate(),
         ];
     }
