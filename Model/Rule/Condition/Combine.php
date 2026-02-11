@@ -12,6 +12,7 @@ namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
 
 use Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Entity;
 use Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\EntityFactory;
+use Magento\Framework\Api\Filter;
 use Magento\Framework\Api\FilterBuilder;
 use Magento\Rule\Model\Condition\Context as RuleContext;
 use Magento\Rule\Model\Condition\Combine as RuleCombine;
