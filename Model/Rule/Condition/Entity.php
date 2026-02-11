@@ -246,6 +246,55 @@ class Entity extends AbstractProduct implements ResetAfterRequestInterface
     }
 
     /**
+     * Build a Filter object for this condition (without adding to builder).
+     *
+     * @return \Magento\Framework\Api\Filter|null
+     */
+    public function buildFilter(): ?\Magento\Framework\Api\Filter
+    {
+        $code = $this->getAttribute();
+        $attribute = $this->getAttributeObject();
+    
+        if (!$code) {
+            return null;
+        }
+    
+        // has_image special case
+        if ($code === 'has_image') {
+            $value = (bool) $this->getValueParsed();
+            return $this->filterBuilder
+                ->setField(EntityInterface::IMAGE)
+                ->setConditionType($value ? 'notnull' : 'null')
+                ->setValue($value)
+                ->create();
+        }
+    
+        if (!$attribute) {
+            return null;
+        }
+    
+        $value = $this->getValueParsed();
+        $operator = $this->getOperatorType();
+        $value = $this->normalizeConditionValue($value, $operator, $attribute);
+    
+        if ($value === null || $value === '' || $value === []) {
+            return null;
+        }
+    
+        // For LIKE operators, apply escaping and wildcards
+        if (in_array($operator, ['like', 'nlike']) && is_string($value)) {
+            $value = str_replace(['%', '_'], ['\%', '\_'], $value);
+            $value = '%' . $value . '%';
+        }
+    
+        return $this->filterBuilder
+            ->setField($code)
+            ->setConditionType($operator)
+            ->setValue(is_array($value) ? implode(',', $value) : $value)
+            ->create();
+    }
+
+    /**
      * Apply filter for the virtual 'has_image' attribute.
      *
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
