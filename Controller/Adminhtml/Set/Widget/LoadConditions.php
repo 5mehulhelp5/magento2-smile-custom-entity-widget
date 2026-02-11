@@ -18,7 +18,6 @@ use Magento\Framework\Data\Form\Element\Factory as ElementFactory;
 use Magento\Framework\Data\FormFactory;
 use Magento\Framework\View\LayoutFactory;
 
-
 class LoadConditions extends Action
 {
     /**
@@ -29,26 +28,6 @@ class LoadConditions extends Action
     public const ADMIN_RESOURCE = 'Magento_Widget::widget_instance';
 
     /**
-     * @var JsonFactory
-     */
-    protected $resultJsonFactory;
-
-    /**
-     * @var LayoutFactory
-     */
-    protected $layoutFactory;
-
-    /**
-     * @var ElementFactory
-     */
-    protected $elementFactory;
-
-    /**
-     * @var FormFactory
-     */
-    protected $formFactory;
-
-    /**
      * @param Context $context
      * @param JsonFactory $resultJsonFactory
      * @param LayoutFactory $layoutFactory
@@ -57,17 +36,12 @@ class LoadConditions extends Action
      */
     public function __construct(
         Context $context,
-        JsonFactory $resultJsonFactory,
-        LayoutFactory $layoutFactory,
-        ElementFactory $elementFactory,
-        FormFactory $formFactory
+        protected readonly JsonFactory $resultJsonFactory,
+        protected readonly LayoutFactory $layoutFactory,
+        protected readonly ElementFactory $elementFactory,
+        protected readonly FormFactory $formFactory
     ) {
         parent::__construct($context);
-
-        $this->resultJsonFactory = $resultJsonFactory;
-        $this->layoutFactory = $layoutFactory;
-        $this->elementFactory = $elementFactory;
-        $this->formFactory = $formFactory;
     }
 
     /**
@@ -91,16 +65,18 @@ class LoadConditions extends Action
         try {
             $layout = $this->layoutFactory->create();
 
-            $formElementId = $formElement ?: 'smile_ce_widget_conditions_container_' . uniqid();
+            $form = $this->formFactory->create();
+            $form->setHtmlIdPrefix('smile_ce_widget_');
+            
             $element = $this->elementFactory->create('text');
-            $element->setForm(new DataObject());
-            $element->setContainer(
-                new DataObject(['html_id' => $formElementId])
-            );
+            $element->setForm($form);
+            $element->setContainer(new DataObject(['html_id' => $formElementId]));
+            
             $conditionsBlock = $layout->createBlock(
                 \Artbambou\SmileCustomEntityWidget\Block\Set\Widget\Conditions::class
             );
             $conditionsBlock->setAttributeSetId($attributeSetId);
+            
             $html = $conditionsBlock->render($element);
 
             return $result->setData([
