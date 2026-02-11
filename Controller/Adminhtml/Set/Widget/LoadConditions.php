@@ -70,7 +70,7 @@ class LoadConditions extends Action
             
             $element = $this->elementFactory->create('text');
             $element->setForm($form);
-            $element->setContainer(new DataObject(['html_id' => $formElementId]));
+            $element->setContainer(new DataObject(['html_id' => $formElement]));
             
             $conditionsBlock = $layout->createBlock(
                 \Artbambou\SmileCustomEntityWidget\Block\Set\Widget\Conditions::class
