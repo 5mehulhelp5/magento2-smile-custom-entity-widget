@@ -14,6 +14,7 @@
         <arguments>
             <argument name="excludedAttributes" xsi:type="array">
                 <item name="url_key" xsi:type="string">url_key</item>
+                <item name="image" xsi:type="string">image</item>
             </argument>
         </arguments>
     </type>
