@@ -294,49 +294,138 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Build a standalone Filter object for this condition.
+     * Build standalone Filter object(s) for this condition.
      *
      * Used by the Combine condition for OR (any) aggregation,
      * where filters need to be grouped without immediately adding to the builder.
      *
-     * @return Filter|null
+     * Returns multiple filters for multiselect IN/NIN operators,
+     * as each value requires its own FIND_IN_SET condition.
+     *
+     * @return Filter[]
      */
-    public function buildFilter(): ?Filter
+    public function buildFilters(): array
     {
         $code = $this->getAttribute();
         $attribute = $this->getAttributeObject();
-
+    
         if (!$code) {
-            return null;
+            return [];
         }
-
+    
         if ($code === 'has_image') {
             $value = (bool) $this->getValueParsed();
-
-            return $this->filterBuilder
-                ->setField(EntityInterface::IMAGE)
-                ->setConditionType($value ? 'notnull' : 'null')
-                ->setValue($value)
-                ->create();
+    
+            return [
+                $this->filterBuilder
+                    ->setField(EntityInterface::IMAGE)
+                    ->setConditionType($value ? 'notnull' : 'null')
+                    ->setValue($value)
+                    ->create()
+            ];
         }
-
+    
         if (!$attribute) {
-            return null;
+            return [];
         }
-
+    
         $value = $this->getValueParsed();
         $operator = $this->getOperatorType();
         $value = $this->normalizeConditionValue($value, $operator, $attribute);
-
+    
         if ($value === null || $value === '' || $value === []) {
-            return null;
+            return [];
         }
-
+    
+        if ($attribute->getFrontendInput() === 'multiselect') {
+            return $this->buildMultiselectFilters($code, $value, $operator);
+        }
+    
+        return [$this->buildStandardFilter($code, $value, $operator)];
+    }
+    
+    /**
+     * Build filter(s) for multiselect attributes.
+     *
+     * Multiselect values are stored as comma-separated strings (e.g. "5,12,8").
+     * Standard IN/NIN operators won't match partial CSV values, so we use
+     * FIND_IN_SET (finset/nfinset) instead.
+     *
+     * For "is one of" (IN): each value produces a finset filter.
+     *   In OR context, these naturally combine as (finset A) OR (finset B).
+     *
+     * For "is not one of" (NIN): each value produces a nfinset filter.
+     *   In OR context, the Combine block should handle these as AND internally,
+     *   but at this level we return individual filters and let the caller decide.
+     *
+     * For single-value operators (eq/neq): one finset/nfinset filter.
+     *
+     * @param string $code Attribute code
+     * @param mixed $value Normalized condition value(s)
+     * @param string $operator SearchCriteria condition type
+     * @return Filter[]
+     */
+    private function buildMultiselectFilters(string $code, mixed $value, string $operator): array
+    {
+        $filters = [];
+    
+        if ($operator === 'in' && is_array($value)) {
+            foreach ($value as $item) {
+                $filters[] = $this->filterBuilder
+                    ->setField($code)
+                    ->setConditionType('finset')
+                    ->setValue($item)
+                    ->create();
+            }
+    
+            return $filters;
+        }
+    
+        if ($operator === 'nin' && is_array($value)) {
+            foreach ($value as $item) {
+                $filters[] = $this->filterBuilder
+                    ->setField($code)
+                    ->setConditionType('nfinset')
+                    ->setValue($item)
+                    ->create();
+            }
+    
+            return $filters;
+        }
+    
+        // Single value: eq → finset, neq → nfinset
+        $conditionType = match ($operator) {
+            'eq'  => 'finset',
+            'neq' => 'nfinset',
+            default => $operator,
+        };
+    
+        $filters[] = $this->filterBuilder
+            ->setField($code)
+            ->setConditionType($conditionType)
+            ->setValue(is_array($value) ? implode(',', $value) : $value)
+            ->create();
+    
+        return $filters;
+    }
+    
+    /**
+     * Build a single filter for non-multiselect attributes.
+     *
+     * Handles LIKE/NLIKE wildcard escaping for text-based searches.
+     *
+     * @param string $code Attribute code
+     * @param mixed $value Condition value
+     * @param string $operator SearchCriteria condition type
+     * @return Filter
+     */
+    private function buildStandardFilter(string $code, mixed $value, string $operator): Filter
+    {
         if (in_array($operator, ['like', 'nlike']) && is_string($value)) {
             $value = str_replace(['%', '_'], ['\%', '\_'], $value);
             $value = '%' . $value . '%';
         }
-
+    
         return $this->filterBuilder
             ->setField($code)
             ->setConditionType($operator)
