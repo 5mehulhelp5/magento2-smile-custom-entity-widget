@@ -12,78 +12,85 @@ namespace Artbambou\SmileCustomEntityWidget\Block\Set\Widget;
 
 use Artbambou\SmileCustomEntityWidget\Model\Config\Source\SortBy;
 use Artbambou\SmileCustomEntityWidget\Model\Rule;
-use Magento\Framework\Api\SearchCriteriaBuilderFactory;
-use Magento\Framework\Api\SortOrder;
-use Magento\Framework\Api\SortOrderBuilder;
-use Magento\Framework\App\ObjectManager;
-use Magento\Framework\DataObject\IdentityInterface;
-use Magento\Framework\Serialize\SerializerInterface;
-use Magento\Framework\View\Element\Template;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Eav\Api\AttributeSetRepositoryInterface;
 use Magento\Eav\Api\Data\AttributeSetInterface;
+use Magento\Framework\Api\SearchCriteriaBuilderFactory;
+use Magento\Framework\Api\SortOrder;
+use Magento\Framework\Api\SortOrderBuilder;
+use Magento\Framework\DataObject\IdentityInterface;
+use Magento\Framework\Serialize\Serializer\Json;
+use Magento\Framework\View\Element\Template;
 use Magento\Widget\Block\BlockInterface;
 use Magento\Widget\Helper\Conditions;
 use Smile\CustomEntity\Api\CustomEntityRepositoryInterface;
-use Smile\CustomEntity\Api\Data\CustomEntityInterface;
 use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Block\CustomEntity\ImageFactory;
+use Smile\CustomEntity\Block\Html\Pager;
 use Smile\CustomEntity\Model\CustomEntity;
 
+/**
+ * Custom Entity Widget Block.
+ *
+ * Displays a filtered, sorted collection of Smile Custom Entities
+ * based on widget parameters configured in the admin.
+ *
+ * Supports pagination, conditional filtering, sorting, and image display.
+ */
 class CustomEntityWidget extends Template implements BlockInterface, IdentityInterface
 {
     /**
-     * Default imge width in pixel
+     * Default image width in pixels.
      */
-    public const int DEFAULT_IMAGE_WIDTH = 200;
+    private const DEFAULT_IMAGE_WIDTH = 200;
 
     /**
-     * Default image height in pixel
+     * Default image height in pixels.
      */
-    public const int DEFAULT_IMAGE_HEIGHT = 200;
+    private const DEFAULT_IMAGE_HEIGHT = 200;
 
     /**
-     * Default value for products count that will be shown
+     * Default number of items to display.
      */
-    public const int DEFAULT_ITEMS_COUNT = 8;
+    private const DEFAULT_ITEMS_COUNT = 8;
 
     /**
-     * Name of request parameter for page number value
+     * Default number of items per page when pagination is enabled.
+     */
+    private const DEFAULT_ITEMS_PER_PAGE = 4;
+
+    /**
+     * Default page variable name for pagination.
+     */
+    private const DEFAULT_PAGE_VAR_NAME = 'sp';
+
+    /**
+     * Default pager visibility.
+     */
+    private const DEFAULT_SHOW_PAGER = false;
+
+    /**
+     * Pager block instance.
      *
-     * @deprecated @see $this->getData('page_var_name')
+     * @var Pager|null
      */
-    public const string PAGE_VAR_NAME = 'sp';
+    private ?Pager $pager = null;
 
     /**
-     * Default value for products per page
-     */
-    public const int DEFAULT_ITEMS_PER_PAGE = 4;
-
-    /**
-     * Default value whether show pager or not
-     */
-    public const bool DEFAULT_SHOW_PAGER = false;
-
-    /**
-     * Instance of pager block
+     * Loaded attribute set instance.
      *
-     * @var Pager
+     * @var AttributeSetInterface|null
      */
-    protected $pager;
+    private ?AttributeSetInterface $attributeSet = null;
 
     /**
-     * @var AttributeSetInterface $attributeSet
-     */
-    private $attributeSet;
-
-    /**
+     * Loaded custom entity collection.
+     *
      * @var \Smile\CustomEntity\Api\Data\CustomEntityInterface[]|null
      */
-    private $entities;
+    private ?array $entities = null;
 
     /**
-     * View constructor.
-     *
      * @param Template\Context $context
      * @param AttributeSetRepositoryInterface $attributeSetRepository
      * @param CustomEntityRepositoryInterface $customEntityRepository
@@ -93,94 +100,96 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
      * @param Rule $rule
      * @param Conditions $conditionsHelper
      * @param ImageFactory $imageFactory
-	 * @param SerializerInterface $serializer
-     * @param array $data
+     * @param Json $serializer
+     * @param array<string, mixed> $data
      */
     public function __construct(
         Template\Context $context,
-        protected readonly AttributeSetRepositoryInterface $attributeSetRepository,
-        protected readonly CustomEntityRepositoryInterface $customEntityRepository,
-        protected readonly EavConfig $eavConfig,
-        protected readonly SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory,
-        protected readonly SortOrderBuilder $sortOrderBuilder,
-        protected readonly Rule $rule,
-        protected readonly Conditions $conditionsHelper,
-        protected readonly ImageFactory $imageFactory,
-        protected readonly SerializerInterface $serializer,
+        private readonly AttributeSetRepositoryInterface $attributeSetRepository,
+        private readonly CustomEntityRepositoryInterface $customEntityRepository,
+        private readonly EavConfig $eavConfig,
+        private readonly SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory,
+        private readonly SortOrderBuilder $sortOrderBuilder,
+        private readonly Rule $rule,
+        private readonly Conditions $conditionsHelper,
+        private readonly ImageFactory $imageFactory,
+        private readonly Json $serializer,
         array $data = []
     ) {
         parent::__construct($context, $data);
     }
 
     /**
-     * {@inheritdoc}
+     * Initialize block cache settings.
+     *
+     * @return void
      */
-	protected function _construct()
-	{
-		parent::_construct();
+    protected function _construct(): void
+    {
+        parent::_construct();
 
-		$this->addData(
-			[
-				'cache_lifetime' => 86400,
-				'cache_tags' => [
-                    CustomEntity::CACHE_TAG
-                ]
-			]
-		);
-	}
+        $this->addData([
+            'cache_lifetime' => 86400,
+            'cache_tags' => [
+                CustomEntity::CACHE_TAG,
+            ],
+        ]);
+    }
 
     /**
-     * Get key pieces for caching block content
+     * Get key pieces for caching block content.
      *
-     * @return array
+     * @return array<int, string|int|null>
      * @SuppressWarnings(PHPMD.RequestAwareBlockMethod)
-     * @throws NoSuchEntityException
      */
-    public function getCacheKeyInfo()
+    public function getCacheKeyInfo(): array
     {
         $conditions = $this->getData('conditions')
             ? $this->getData('conditions')
             : $this->getData('conditions_encoded');
 
         return [
-           'AB_CUSTOM_ENTITY_WIDGET',
-           $this->_storeManager->getStore()->getId(),
-           $this->_design->getDesignTheme()->getId(),
-           $this->getImageWidth(),
-           $this->getImageHeight(),
-           $this->canShowFooterButton(),
-           (int)$this->getRequest()->getParam($this->getData('page_var_name'), 1),
-           $this->getItemsPerPage(),
-           $this->getItemsCount(),
-           $conditions,
-           $this->serializer->serialize($this->getRequest()->getParams()),
-           $this->getTemplate()
+            'AB_CUSTOM_ENTITY_WIDGET',
+            $this->_storeManager->getStore()->getId(),
+            $this->_design->getDesignTheme()->getId(),
+            $this->getImageWidth(),
+            $this->getImageHeight(),
+            $this->canShowFooterButton(),
+            (int) $this->getRequest()->getParam($this->getPageVarName(), 1),
+            $this->getItemsPerPage(),
+            $this->getItemsCount(),
+            $conditions,
+            $this->serializer->serialize($this->getRequest()->getParams()),
+            $this->getTemplate(),
         ];
     }
 
     /**
-     * Prepare to html
-     * Check has custom entity
+     * Render block HTML only if entities are available.
      *
      * @return string
      */
-    protected function _toHtml()
+    protected function _toHtml(): string
     {
         if ($this->getEntities()) {
             return parent::_toHtml();
         }
+
         return '';
     }
 
     /**
-     * Return custom entities.
+     * Return filtered and sorted custom entities.
+     *
+     * Builds a SearchCriteria from widget parameters (attribute set, conditions,
+     * sort order) and queries the repository. Handles pagination when enabled.
      *
      * @return \Smile\CustomEntity\Api\Data\CustomEntityInterface[]
      */
-    public function getEntities()
+    public function getEntities(): array
     {
-        if (!$this->entities) {
-            /** @var SearchCriteriaBuilderFactory $searchCriteriaBuilder */
+        if ($this->entities === null) {
+            /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
             $searchCriteriaBuilder = $this->searchCriteriaBuilderFactory->create();
 
             $searchCriteriaBuilder->addFilter(
@@ -188,26 +197,30 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
                 $this->getAttributeSet()->getAttributeSetId()
             );
 
-            $searchCriteriaBuilder->addFilter(
-                'is_active',
-                true
-            );
+            $searchCriteriaBuilder->addFilter('is_active', true);
 
             $conditions = $this->getConditions();
             $conditions->collectValidatedAttributes($searchCriteriaBuilder);
 
-            /** @var SortOrderBuilder $sortOrderBuilder */
-            $sortOrder = $this->sortOrderBuilder->setField($this->getSortBy())
+            $sortOrder = $this->sortOrderBuilder
+                ->setField($this->getSortBy())
                 ->setDirection($this->getSortDirection())
                 ->create();
             $searchCriteriaBuilder->setSortOrders([$sortOrder]);
 
             if ($this->showPager()) {
-                $this->getPager()->addCriteria($searchCriteriaBuilder);
-                $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
-                $this->getPager()->setSearchResult($searchResult);
+                $pager = $this->getPager();
+
+                if ($pager !== null) {
+                    $pager->addCriteria($searchCriteriaBuilder);
+                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+                    $pager->setSearchResult($searchResult);
+                } else {
+                    $searchCriteriaBuilder->setPageSize($this->getItemsCount());
+                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+                }
             } else {
-				$searchCriteriaBuilder->setPageSize($this->getItemsCount());
+                $searchCriteriaBuilder->setPageSize($this->getItemsCount());
                 $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
             }
 
@@ -218,257 +231,288 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     }
 
     /**
-     * Return attribute set
+     * Return the attribute set used for filtering entities.
      *
-     * @return bool|AttributeSetInterface
+     * Falls back to the default attribute set if none is configured.
+     *
+     * @return AttributeSetInterface
      */
-    public function getAttributeSet()
+    public function getAttributeSet(): AttributeSetInterface
     {
-        if (! $this->attributeSet) {
+        if ($this->attributeSet === null) {
             if ($this->hasData('attribute_set_id')) {
-                $attributeSetId = $this->getData('attribute_set_id');
+                $attributeSetId = (int) $this->getData('attribute_set_id');
             } else {
-                $entityType = $this->eavConfig->getEntityType(CustomEntityAttributeInterface::ENTITY_TYPE_CODE);
-                $attributeSetId = $entityType->getDefaultAttributeSetId();
+                $entityType = $this->eavConfig->getEntityType(
+                    CustomEntityAttributeInterface::ENTITY_TYPE_CODE
+                );
+                $attributeSetId = (int) $entityType->getDefaultAttributeSetId();
             }
 
-            $attributeSet = $this->attributeSetRepository->get($attributeSetId);
-            $this->attributeSet = $attributeSet;
+            $this->attributeSet = $this->attributeSetRepository->get($attributeSetId);
         }
+
         return $this->attributeSet;
     }
 
     /**
-     * Return attribute set url.
+     * Return the URL of the attribute set listing page.
+     *
+     * Uses the last loaded entity to determine the attribute set URL key.
      *
      * @return string
      */
-    public function getAttributeSetUrl()
+    public function getAttributeSetUrl(): string
     {
-        $customEntity = end($this->entities);
+        $entities = $this->getEntities();
+
+        if (empty($entities)) {
+            return '';
+        }
+
+        $customEntity = end($entities);
+
         return $this->_urlBuilder->getDirectUrl($customEntity->getAttributeSetUrlKey());
     }
 
     /**
-     * Return custom entity image.
+     * Return the image HTML for a custom entity.
      *
+     * @param \Smile\CustomEntity\Api\Data\CustomEntityInterface $entity
      * @return string
      */
-    public function getImage($entity)
+    public function getImage($entity): string
     {
         return $this->imageFactory->create($entity)->toHtml();
     }
 
     /**
-     * Return entity url.
+     * Return the frontend URL for a custom entity.
      *
+     * @param \Smile\CustomEntity\Api\Data\CustomEntityInterface $entity
      * @return string
      */
-    public function getEntityUrl($entity)
+    public function getEntityUrl($entity): string
     {
         return $this->_urlBuilder->getDirectUrl($entity->getUrlPath());
     }
 
     /**
-     * Retrieve how many items should be displayed
+     * Retrieve the total number of items to display.
      *
      * @return int
      */
-    public function getItemsCount()
+    public function getItemsCount(): int
     {
-        if ($this->hasData('items_count')) {
-            return $this->getData('items_count');
-        }
-
-        if (null === $this->getData('items_count')) {
+        if (!$this->hasData('items_count') || $this->getData('items_count') === null) {
             $this->setData('items_count', self::DEFAULT_ITEMS_COUNT);
         }
 
-        return $this->getData('items_count');
+        return (int) $this->getData('items_count');
     }
 
     /**
-     * Retrieve how many items should be displayed
+     * Retrieve the number of items per page.
      *
      * @return int
      */
-    public function getItemsPerPage()
+    public function getItemsPerPage(): int
     {
         if (!$this->hasData('items_per_page')) {
             $this->setData('items_per_page', self::DEFAULT_ITEMS_PER_PAGE);
         }
-        return $this->getData('items_per_page');
+
+        return (int) $this->getData('items_per_page');
     }
 
     /**
-     * Return flag whether pager need to be shown or not
+     * Determine whether the pager should be displayed.
      *
      * @return bool
      */
-    public function showPager()
+    public function showPager(): bool
     {
         if (!$this->hasData('show_pager')) {
             $this->setData('show_pager', self::DEFAULT_SHOW_PAGER);
         }
-        return (bool)$this->getData('show_pager');
+
+        return (bool) $this->getData('show_pager');
     }
 
     /**
-     * Retrieve how many items should be displayed on page
+     * Get the page variable name for pagination URL parameter.
      *
-     * @return int
+     * @return string
      */
-    protected function getPageSize()
+    public function getPageVarName(): string
     {
-        return $this->showPager() ? $this->getItemsPerPage() : $this->getItemsCount();
+        return $this->getData('page_var_name') ?: self::DEFAULT_PAGE_VAR_NAME;
     }
 
     /**
-     * Render pager
+     * Retrieve the pager block instance.
      *
-     * @return Pager
+     * Creates and configures the pager block on first call.
+     * Returns null if pagination is disabled.
+     *
+     * @return Pager|null
      */
-    public function getPager()
+    public function getPager(): ?Pager
     {
-        if ($this->showPager()) {
-            if (!$this->pager) {
-                $this->pager = $this->getLayout()->createBlock(
-                    \Smile\CustomEntity\Block\Html\Pager::class,
-                    $this->getWidgetPagerBlockName()
-                );
-
-                $this->pager->setUseContainer(true)
-                    ->setShowAmounts(true)
-                    ->setShowPerPage(false)
-                    ->setPageVarName($this->getData('page_var_name') ?: self::PAGE_VAR_NAME)
-                    ->setLimit($this->getItemsPerPage())
-                    ->setTotalLimit($this->getItemsCount());
-            }
-            if ($this->pager instanceof \Magento\Framework\View\Element\AbstractBlock) {
-                return $this->pager;
-            }
+        if (!$this->showPager()) {
+            return null;
         }
+
+        if ($this->pager === null) {
+            /** @var Pager $pager */
+            $pager = $this->getLayout()->createBlock(
+                Pager::class,
+                $this->getWidgetPagerBlockName()
+            );
+
+            $pager->setUseContainer(true)
+                ->setShowAmounts(true)
+                ->setShowPerPage(false)
+                ->setPageVarName($this->getPageVarName())
+                ->setLimit($this->getItemsPerPage())
+                ->setTotalLimit($this->getItemsCount());
+
+            $this->pager = $pager;
+        }
+
+        return $this->pager;
+    }
+
+    /**
+     * Render pagination HTML.
+     *
+     * @return string
+     */
+    public function getPagerHtml(): string
+    {
+        $pager = $this->getPager();
+
+        if ($pager !== null) {
+            return $pager->toHtml();
+        }
+
         return '';
     }
 
     /**
-     * Render pagination HTML
+     * Get the attribute code to sort entities by.
      *
-     * @return string
-     * @throws LocalizedException
-     */
-    public function getPagerHtml()
-    {
-        if ($this->showPager()) {
-            if ($this->pager instanceof \Magento\Framework\View\Element\AbstractBlock) {
-                return $this->pager->toHtml();
-            }
-        }
-        return '';
-    }
-
-    /**
-     * Sort by
+     * Falls back to 'name' if the configured value is not valid.
      *
      * @return string
      */
-    public function getSortBy()
+    public function getSortBy(): string
     {
         $sortBy = $this->getData('sort_by');
+
         if (!in_array($sortBy, array_keys(SortBy::toArray()))) {
             $sortBy = 'name';
         }
+
         return $sortBy;
     }
 
     /**
-     * Sort direction
+     * Get the sort direction (ASC or DESC).
      *
      * @return string
      */
-    public function getSortDirection()
+    public function getSortDirection(): string
     {
         $direction = SortOrder::SORT_DESC;
+
         if ($this->getData('sort_direction')) {
-            $direction = strtoupper((string)$this->getData('sort_direction'));
+            $direction = strtoupper((string) $this->getData('sort_direction'));
         }
+
         if (!in_array($direction, [SortOrder::SORT_DESC, SortOrder::SORT_ASC])) {
             $direction = SortOrder::SORT_DESC;
         }
+
         return $direction;
     }
 
     /**
-    * Get the width of image
-	*
-    * @return int
-    */
-    public function getImageWidth()
+     * Get the configured image width.
+     *
+     * @return int
+     */
+    public function getImageWidth(): int
     {
         if ($this->hasData('image_width')) {
-            return $this->getData('image_width');
+            return (int) $this->getData('image_width');
         }
+
         return self::DEFAULT_IMAGE_WIDTH;
     }
 
     /**
-    * Get the height of image
-	*
-    * @return int
-    */
-    public function getImageHeight()
+     * Get the configured image height.
+     *
+     * @return int
+     */
+    public function getImageHeight(): int
     {
         if ($this->hasData('image_height')) {
-            return $this->getData('image_height');
+            return (int) $this->getData('image_height');
         }
+
         return self::DEFAULT_IMAGE_HEIGHT;
     }
 
     /**
-    * Show url attribute set custom entity
-	*
-    * @return bool
-    */
-    public function canShowFooterButton()
+     * Determine whether the footer button should be displayed.
+     *
+     * @return bool
+     */
+    public function canShowFooterButton(): bool
     {
         if ($this->hasData('show_footer_button')) {
-            return $this->getData('show_footer_button');
+            return (bool) $this->getData('show_footer_button');
         }
+
         return false;
     }
 
     /**
-    * Get footer button text
-	*
-    * @return bool
-    */
-    public function getTextFooterButton()
+     * Get the footer button label text.
+     *
+     * @return string|\Magento\Framework\Phrase
+     */
+    public function getTextFooterButton(): string|\Magento\Framework\Phrase
     {
-        if ($this->hasData('text_footer_button')) {
+        if ($this->hasData('text_footer_button') && $this->getData('text_footer_button')) {
             return $this->getData('text_footer_button');
         }
+
         return __('Discover');
     }
 
     /**
-    * Get footer button title
-	*
-    * @return bool
-    */
-    public function getTitleFooterButton()
+     * Get the footer button title attribute.
+     *
+     * @return string|false
+     */
+    public function getTitleFooterButton(): string|false
     {
-        if ($this->hasData('title_footer_button')) {
-            return $this->getData('title_footer_button');
+        if ($this->hasData('title_footer_button') && $this->getData('title_footer_button')) {
+            return (string) $this->getData('title_footer_button');
         }
+
         return false;
     }
 
     /**
-     * Get conditions
+     * Decode and load the widget conditions into the Rule model.
      *
-     * @return Combine
+     * @return \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Combine
      */
-    public function getConditions()
+    public function getConditions(): \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Combine
     {
         $conditions = $this->getData('conditions_encoded')
             ? $this->getData('conditions_encoded')
@@ -479,39 +523,44 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
         }
 
         $this->rule->loadPost(['conditions' => $conditions]);
+
         return $this->rule->getConditions();
     }
 
     /**
-     * Return block identities.
+     * Return block cache identity tags.
      *
-     * @return array
+     * Aggregates cache tags from all loaded entities and the attribute set.
+     *
+     * @return string[]
      */
     public function getIdentities(): array
-	{
-	    $identities = [];
-	    if ($this->getEntities()) {
-	        foreach ($this->getEntities() as $entity) {
-	            $identities = array_merge($identities, $entity->getIdentities());
-	        }
-	    }
-	
-	    if ($attributeSet = $this->getAttributeSet()) {
-	        $identities[] = CustomEntity::CACHE_CUSTOM_ENTITY_SET_TAG . '_' . $attributeSet->getAttributeSetId();
-	    }
-	
-	    return array_unique($identities);
-	}
+    {
+        $identities = [];
+
+        if ($this->getEntities()) {
+            foreach ($this->getEntities() as $entity) {
+                $identities = array_merge($identities, $entity->getIdentities());
+            }
+        }
+
+        if ($attributeSet = $this->getAttributeSet()) {
+            $identities[] = CustomEntity::CACHE_CUSTOM_ENTITY_SET_TAG . '_' . $attributeSet->getAttributeSetId();
+        }
+
+        return array_unique($identities);
+    }
 
     /**
-     * Get widget block name
+     * Generate the unique pager block name.
      *
      * @return string
      */
-    private function getWidgetPagerBlockName()
+    private function getWidgetPagerBlockName(): string
     {
         $pageName = $this->getData('page_var_name');
         $pagerBlockName = 'widget.smile.set.list.pager';
+
         if (!$pageName) {
             return $pagerBlockName;
         }
@@ -520,9 +569,9 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     }
 
     /**
-     * Decode widget conditions.
+     * Decode widget conditions from an encoded string.
      *
-     * @param string $encodedConditions Conditions encoded as JSON.
+     * @param string $encodedConditions Conditions encoded by the widget helper.
      * @return array<mixed> Decoded conditions array.
      * @see \Magento\Widget\Model\Widget::getDirectiveParam
      */
@@ -530,15 +579,16 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     {
         try {
             $conditions = $this->conditionsHelper->decode(htmlspecialchars_decode($encodedConditions));
+
             return is_array($conditions) ? $conditions : [];
         } catch (\InvalidArgumentException $exception) {
-            /** @var array{exception:\Throwable, encoded_conditions:string, uri:string} $context */
             $context = [
                 'exception' => $exception,
                 'encoded_conditions' => $encodedConditions,
                 'uri' => $this->_request->getRequestUri(),
             ];
             $this->_logger->error($exception->getMessage(), $context);
+
             return [];
         }
     }
