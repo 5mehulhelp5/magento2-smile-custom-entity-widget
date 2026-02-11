@@ -23,7 +23,7 @@ class SortBy implements ArrayInterface
     public function toOptionArray(): array
     {
         return [
-            ['value' => AbstractEntity::ATTRIBUTE_SET_ID, 'label' => __('ID')],
+            ['value' => 'entity_id', 'label' => __('ID')],
             ['value' => AbstractEntity::CREATED_AT, 'label' => __('Created At')],
             ['value' => AbstractEntity::UPDATED_AT, 'label' => __('Updated At')],
             ['value' => AbstractEntity::NAME, 'label' => __('Name')]
@@ -38,7 +38,7 @@ class SortBy implements ArrayInterface
     public static function toArray(): array
     {
         return [
-            AbstractEntity::ATTRIBUTE_SET_ID => __('ID'),
+            'entity_id' => __('ID'),
             AbstractEntity::CREATED_AT => __('Created At'),
             AbstractEntity::UPDATED_AT => __('Updated At'),
             AbstractEntity::NAME => __('Name')
