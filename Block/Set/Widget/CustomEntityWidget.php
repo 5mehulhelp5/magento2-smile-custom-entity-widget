@@ -16,6 +16,7 @@ use Magento\Framework\Api\SearchCriteriaBuilderFactory;
 use Magento\Framework\Api\SortOrder;
 use Magento\Framework\Api\SortOrderBuilder;
 use Magento\Framework\App\ObjectManager;
+use Magento\Framework\DataObject\IdentityInterface;
 use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\View\Element\Template;
 use Magento\Eav\Model\Config as EavConfig;
@@ -29,7 +30,7 @@ use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Block\CustomEntity\ImageFactory;
 use Smile\CustomEntity\Model\CustomEntity;
 
-class CustomEntityWidget extends Template implements BlockInterface
+class CustomEntityWidget extends Template implements BlockInterface, IdentityInterface
 {
     /**
      * Default imge width in pixel
