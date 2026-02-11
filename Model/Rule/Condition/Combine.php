@@ -91,6 +91,15 @@ class Combine extends RuleCombine
      * Respects the aggregator: "all" = AND (separate filter groups),
      * "any" = OR (single filter group via addFilters).
      *
+     * For OR aggregation with multiselect attributes, each finset filter
+     * is added individually to the OR group so that
+     * (multiselect HAS 5) OR (multiselect HAS 8) OR (name = "Foo")
+     * works correctly with FIND_IN_SET.
+     *
+     * For NIN (nfinset) in OR context: these are inherently AND-logic
+     * ("must NOT contain A" AND "must NOT contain B"), so they are added
+     * as separate filter groups to preserve correct semantics.
+     *
      * @param \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder
      * @return $this
      */
@@ -100,22 +109,37 @@ class Combine extends RuleCombine
     
         if ($isAny) {
             $orFilters = [];
+            $andFilters = [];
     
             foreach ($this->getConditions() as $condition) {
                 if ($condition instanceof self) {
-                    // Nested Combine: recurse (it will add its own groups)
+                    // Nested Combine: recurse (adds its own filter groups)
                     $condition->collectValidatedAttributes($searchCriteriaBuilder);
                 } elseif ($condition instanceof Entity) {
-                    $filter = $condition->buildFilter();
-                    if ($filter) {
-                        $orFilters[] = $filter;
+                    $filters = $condition->buildFilters();
+    
+                    if (empty($filters)) {
+                        continue;
                     }
+    
+                    // nfinset filters must remain AND-joined even in OR context,
+                    // because "NOT contains A AND NOT contains B" cannot be OR'd.
+                    $this->partitionFilters($filters, $orFilters, $andFilters);
                 }
             }
     
-            // addFilters (plural) creates a single FilterGroup = OR
+            // OR group: addFilters (plural) creates a single FilterGroup
             if (!empty($orFilters)) {
                 $searchCriteriaBuilder->addFilters($orFilters);
+            }
+    
+            // AND group: each nfinset filter gets its own FilterGroup
+            foreach ($andFilters as $filter) {
+                $searchCriteriaBuilder->addFilter(
+                    $filter->getField(),
+                    $filter->getValue(),
+                    $filter->getConditionType()
+                );
             }
         } else {
             // "all" aggregator: each condition adds its own AND group
@@ -125,5 +149,30 @@ class Combine extends RuleCombine
         }
     
         return $this;
+    }
+    
+    /**
+     * Partition filters into OR-compatible and AND-only groups.
+     *
+     * nfinset (NOT FIND_IN_SET) conditions require AND semantics:
+     * "NOT contains A" OR "NOT contains B" would match almost everything,
+     * which is never the intended behavior. These must remain AND-joined.
+     *
+     * All other filter types (finset, eq, like, etc.) are safe for OR grouping.
+     *
+     * @param Filter[] $filters Source filters to partition
+     * @param Filter[] &$orFilters Accumulator for OR-compatible filters
+     * @param Filter[] &$andFilters Accumulator for AND-only filters (nfinset)
+     * @return void
+     */
+    private function partitionFilters(array $filters, array &$orFilters, array &$andFilters): void
+    {
+        foreach ($filters as $filter) {
+            if ($filter->getConditionType() === 'nfinset') {
+                $andFilters[] = $filter;
+            } else {
+                $orFilters[] = $filter;
+            }
+        }
     }
 }
