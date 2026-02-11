@@ -49,10 +49,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
      *
      * @var string[]
      */
-    private array $excludeAttributes = [
-        CustomEntityInterface::URL_KEY,
-        'image',
-    ];
+    private array $excludeAttributes = [];
 
     /**
      * Operator input types mapping.
