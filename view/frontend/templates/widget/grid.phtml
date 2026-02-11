@@ -6,15 +6,15 @@
  * @package    Artbambou_SmileCustomEntityWidget
  * @author     Ilan Parmentier
  */
-?>
-<?php
+
+use Magento\Framework\UrlInterface;
+
 /*
  * Attribute set frontend view block
  *
- * @var $escaper \Magento\Framework\Escaper
- * @var $block \Artbambou\SmileCustomEntityWidget\Block\Set\Widget\CustomEntityWidget
+ * @var \Magento\Framework\Escaper $escaper
+ * @var \Artbambou\SmileCustomEntityWidget\Block\Set\Widget\CustomEntityWidget $block
  */
-use Magento\Framework\UrlInterface;
 
 $entities = $block->getEntities();
 $type = 'widget-ces-grid';
