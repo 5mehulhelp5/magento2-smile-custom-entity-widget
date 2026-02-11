@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Artbambou SmileCustomEntityWidget Module
+ *
+ * @category   Artbambou
+ * @package    Artbambou_SmileCustomEntityWidget
+ * @author     Ilan Parmentier
+ */
+ -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/di.xsd">
+    <type name="Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Combine">
+        <arguments>
+            <argument name="excludedAttributes" xsi:type="array">
+                <item name="url_key" xsi:type="string">url_key</item>
+            </argument>
+        </arguments>
+    </type>
+</config>
