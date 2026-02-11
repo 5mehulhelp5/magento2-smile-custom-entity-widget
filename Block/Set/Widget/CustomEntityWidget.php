@@ -206,9 +206,8 @@ class CustomEntityWidget extends Template implements BlockInterface
                 $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
                 $this->getPager()->setSearchResult($searchResult);
             } else {
-                $searchResult = $this->customEntityRepository->getList(
-                    $searchCriteriaBuilder->create()->setPageSize($this->getItemsCount())
-                );
+				$searchCriteriaBuilder->setPageSize($this->getItemsCount());
+                $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
             }
 
             $this->entities = $searchResult->getItems();
