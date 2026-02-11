@@ -10,9 +10,11 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
 
-use Magento\Framework\Api\FilterBuilder;
-use Magento\Rule\Model\Condition\Combine as RuleCombine;
 use Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Entity;
+use Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\EntityFactory;
+use Magento\Framework\Api\FilterBuilder;
+use Magento\Rule\Model\Condition\Context as RuleContext;
+use Magento\Rule\Model\Condition\Combine as RuleCombine;
 
 /**
  * Combination of product conditions
@@ -30,32 +32,26 @@ class Combine extends RuleCombine
     protected $type = 'Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\Combine';
 
     /**
-     * @var \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\EntityFactory
-     */
-    protected $entityFactory;
-
-    /**
      * @var array
      */
     private $excludedAttributes;
 
     /**
-     * @param \Magento\Rule\Model\Condition\Context $context
-     * @param \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\EntityFactory $entityFactory
+     * @param RuleContext $context
+     * @param EntityFactory $entityFactory
      * @param FilterBuilder $filterBuilder
      * @param array $data
      * @param array $excludedAttributes
      */
     public function __construct(
-        \Magento\Rule\Model\Condition\Context $context,
-        \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\EntityFactory $entityFactory,
-        FilterBuilder $filterBuilder,
+        RuleContext $context,
+        protected readonly EntityFactory $entityFactory,
+        protected readonly FilterBuilder $filterBuilder,
         array $data = [],
         array $excludedAttributes = []
     ) {
-        $this->entityFactory = $entityFactory;
-        $this->filterBuilder = $filterBuilder;
         parent::__construct($context, $data);
+        
         $this->setType($this->type);
         $this->excludedAttributes = $excludedAttributes;
     }
