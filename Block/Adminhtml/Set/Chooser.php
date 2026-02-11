@@ -13,7 +13,8 @@ namespace Artbambou\SmileCustomEntityWidget\Block\Adminhtml\Set;
 use Magento\Backend\Block\Template\Context;
 use Magento\Backend\Helper\Data;
 use Magento\Backend\Block\Widget\Grid\Extended;
-use Magento\Eav\Model\Config;
+use Magento\Eav\Api\AttributeSetRepositoryInterface;
+use Magento\Eav\Model\Config as EavConfig;
 use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 
 /**
@@ -22,33 +23,24 @@ use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 class Chooser extends Extended
 {
     /**
-     * @var \Magento\Eav\Model\Config
-     */
-    private $eavConfig;
-
-    /**
-     * @var \Magento\Eav\Api\AttributeSetRepositoryInterface
-     */
-    protected $attributeSetRepository;
-
-    /**
      * @param Context $context
      * @param Data $backendHelper
-     * @param Magento\Eav\Model\Config $eavConfig
-     * @param Magento\Eav\Api\AttributeSetRepositoryInterface $attributeSetRepository
+     * @param EavConfig $eavConfig
+     * @param AttributeSetRepositoryInterface $attributeSetRepository
      * @param array $data
      */
     public function __construct(
         Context $context,
         Data $backendHelper,
-        \Magento\Eav\Model\Config $eavConfig,
-        \Magento\Eav\Api\AttributeSetRepositoryInterface $attributeSetRepository,
+        protected readonly EavConfig $eavConfig,
+        protected readonly AttributeSetRepositoryInterface $attributeSetRepository,
         array $data = []
     ) {
-        $this->eavConfig = $eavConfig;
-        $this->attributeSetRepository = $attributeSetRepository;
-
-        parent::__construct($context, $backendHelper, $data);
+        parent::__construct(
+            $context, 
+            $backendHelper, 
+            $data
+        );
     }
 
     /**
@@ -165,42 +157,7 @@ class Chooser extends Extended
             ]
         );
 
-        /**
-         * Check is single store mode
-         */
-        if (!$this->_storeManager->isSingleStoreMode()) {
-            $this->addColumn(
-                'store_id',
-                [
-                    'header' => __('Store View'),
-                    'index' => 'store_id',
-                    'type' => 'store',
-                    'store_all' => true,
-                    'store_view' => true,
-                    'sortable' => false,
-                    'filter_condition_callback' => [$this, '_filterStoreCondition']
-                ]
-            );
-        }
-
         return parent::_prepareColumns();
-    }
-
-    /**
-     * Filter store condition
-     *
-     * @param \Magento\Framework\Data\Collection $collection
-     * @param \Magento\Framework\DataObject $column
-     * @return void
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    protected function _filterStoreCondition($collection, \Magento\Framework\DataObject $column)
-    {
-        if (!($value = $column->getFilter()->getValue())) {
-            return;
-        }
-
-        $this->getCollection()->addStoreFilter($value);
     }
 
     /**
