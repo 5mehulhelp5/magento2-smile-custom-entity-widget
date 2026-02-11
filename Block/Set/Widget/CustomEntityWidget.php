@@ -19,6 +19,7 @@ use Magento\Framework\Api\SearchCriteriaBuilderFactory;
 use Magento\Framework\Api\SortOrder;
 use Magento\Framework\Api\SortOrderBuilder;
 use Magento\Framework\DataObject\IdentityInterface;
+use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Serialize\Serializer\Json;
 use Magento\Framework\View\Element\Template;
 use Magento\Widget\Block\BlockInterface;
@@ -239,26 +240,68 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     /**
      * Return the attribute set used for filtering entities.
      *
-     * Falls back to the default attribute set if none is configured.
+     * Falls back to the default attribute set if none is configured
+     * or if the configured attribute set no longer exists.
      *
-     * @return AttributeSetInterface
+     * @return AttributeSetInterface|null
      */
-    public function getAttributeSet(): AttributeSetInterface
+    public function getAttributeSet(): ?AttributeSetInterface
     {
         if ($this->attributeSet === null) {
             if ($this->hasData('attribute_set_id')) {
                 $attributeSetId = (int) $this->getData('attribute_set_id');
             } else {
-                $entityType = $this->eavConfig->getEntityType(
-                    CustomEntityAttributeInterface::ENTITY_TYPE_CODE
-                );
-                $attributeSetId = (int) $entityType->getDefaultAttributeSetId();
+                $attributeSetId = $this->getDefaultAttributeSetId();
             }
-
-            $this->attributeSet = $this->attributeSetRepository->get($attributeSetId);
+    
+            try {
+                $this->attributeSet = $this->attributeSetRepository->get($attributeSetId);
+            } catch (NoSuchEntityException $e) {
+                $this->_logger->warning(
+                    sprintf(
+                        'CustomEntityWidget: Attribute set ID %d not found. Falling back to default.',
+                        $attributeSetId
+                    )
+                );
+    
+                $defaultId = $this->getDefaultAttributeSetId();
+    
+                if ($defaultId === $attributeSetId) {
+                    $this->_logger->error(
+                        'CustomEntityWidget: Default attribute set could not be loaded. Widget will render empty.'
+                    );
+                    return null;
+                }
+    
+                try {
+                    $this->attributeSet = $this->attributeSetRepository->get($defaultId);
+                } catch (NoSuchEntityException $e) {
+                    $this->_logger->error(
+                        sprintf(
+                            'CustomEntityWidget: Default attribute set ID %d not found. Widget will render empty.',
+                            $defaultId
+                        )
+                    );
+                    return null;
+                }
+            }
         }
-
+    
         return $this->attributeSet;
+    }
+    
+    /**
+     * Retrieve the default attribute set ID for the custom entity type.
+     *
+     * @return int
+     */
+    private function getDefaultAttributeSetId(): int
+    {
+        $entityType = $this->eavConfig->getEntityType(
+            CustomEntityAttributeInterface::ENTITY_TYPE_CODE
+        );
+    
+        return (int) $entityType->getDefaultAttributeSetId();
     }
 
     /**
