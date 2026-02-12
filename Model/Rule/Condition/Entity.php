@@ -21,41 +21,12 @@ use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
 use Smile\ScopedEav\Api\Data\EntityInterface;
 
-/**
- * Custom Entity Rule Condition.
- */
-class Entity extends AbstractCondition implements ResetAfterRequestInterface
-{In alignment with PHP 8.3 strict typing and Magento 2 Coding Standards, here is the corrected implementation including the missing buildFilters logic and the requested English PHPDoc for the specified properties.
-Requirement Analysis
-
-The error Méthode non valide : ...Entity::buildFilters occurs because the Combine class (handling "ANY/OR" logic) expects a buildFilters() method to retrieve raw Filter objects for grouping. The current Entity class applies filters directly to the SearchCriteriaBuilder, which works for "ALL/AND" logic but causes a fatal error during "OR" evaluation.
-Implementation Plan
-
-    Decoupling: Move filter creation logic into a dedicated buildFilters() method.
-
-    Compatibility: Update addToSearchCriteria() to consume buildFilters().
-
-    Documentation: Add English PHPDoc to all properties using strict type hinting.
-
-Implementation
-
-File: app/code/Artbambou/SmileCustomEntityWidget/Model/Rule/Condition/Entity.php
-PHP
-
-<?php
-declare(strict_types=1);
-
-namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
-
-use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
-use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
-use Magento\Framework\Api\Filter;
 
 /**
  * Custom Entity Rule Condition model.
- * * Refactored to support complex "OR" logic via buildFilters.
+ * Refactored to support complex "OR" logic via buildFilters.
  */
-class Entity extends \Magento\Rule\Model\Condition\AbstractCondition
+class Entity extends AbstractCondition implements ResetAfterRequestInterface
 {
     /**
      * The name of the HTML element for the condition parameters.
