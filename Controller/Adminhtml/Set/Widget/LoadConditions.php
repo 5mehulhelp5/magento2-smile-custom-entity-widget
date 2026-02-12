@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Controller\Adminhtml\Set\Widget;
 
+use Artbambou\SmileCustomEntityWidget\Block\Set\Widget\Conditions as SetConditions;
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
 use Magento\Framework\DataObject;
@@ -67,16 +68,14 @@ class LoadConditions extends Action
 
             $form = $this->formFactory->create();
             $form->setHtmlIdPrefix('smile_ce_widget_');
-            
+
             $element = $this->elementFactory->create('text');
             $element->setForm($form);
             $element->setContainer(new DataObject(['html_id' => $formElement]));
-            
-            $conditionsBlock = $layout->createBlock(
-                \Artbambou\SmileCustomEntityWidget\Block\Set\Widget\Conditions::class
-            );
+
+            $conditionsBlock = $layout->createBlock(SetConditions::class);
             $conditionsBlock->setAttributeSetId($attributeSetId);
-            
+
             $html = $conditionsBlock->render($element);
 
             return $result->setData([

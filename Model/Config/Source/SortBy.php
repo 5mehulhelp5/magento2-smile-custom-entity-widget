@@ -10,10 +10,10 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Model\Config\Source;
 
-use Magento\Framework\Option\ArrayInterface;
+use Magento\Framework\Data\OptionSourceInterface;
 use Smile\ScopedEav\Model\AbstractEntity;
 
-class SortBy implements ArrayInterface
+class SortBy implements OptionSourceInterface
 {
     /**
      * Options getter

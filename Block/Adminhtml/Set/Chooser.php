@@ -37,8 +37,8 @@ class Chooser extends Extended
         array $data = []
     ) {
         parent::__construct(
-            $context, 
-            $backendHelper, 
+            $context,
+            $backendHelper,
             $data
         );
     }
@@ -54,7 +54,6 @@ class Chooser extends Extended
         $this->setDefaultSort('attribute_set_id');
         $this->setDefaultDir('DESC');
         $this->setUseAjax(true);
-        $this->setDefaultFilter(['chooser_is_active' => '1']);
     }
 
     /**

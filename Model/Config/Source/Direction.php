@@ -11,8 +11,9 @@ declare(strict_types=1);
 namespace Artbambou\SmileCustomEntityWidget\Model\Config\Source;
 
 use Magento\Framework\Api\SortOrder;
+use Magento\Framework\Data\OptionSourceInterface;
 
-class Direction implements \Magento\Framework\Option\ArrayInterface
+class Direction implements OptionSourceInterface
 {
     /**
      * Options getter
@@ -34,6 +35,9 @@ class Direction implements \Magento\Framework\Option\ArrayInterface
      */
     public static function toArray(): array
     {
-        return [SortOrder::SORT_DESC => __('Descending'), SortOrder::SORT_ASC => __('Ascending')];
+        return [
+            SortOrder::SORT_DESC => __('Descending'),
+            SortOrder::SORT_ASC => __('Ascending')
+        ];
     }
 }

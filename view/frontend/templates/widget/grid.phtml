@@ -9,7 +9,7 @@
 
 use Magento\Framework\UrlInterface;
 
-/*
+/**
  * Attribute set frontend view block
  *
  * @var \Magento\Framework\Escaper $escaper
@@ -22,15 +22,17 @@ $mode = 'grid';
 $imageWidth = (int)$block->getImageWidth();
 $imageHeight = (int)$block->getImageHeight();
 ?>
-<div class="block widget block-ces-list <?= /* @noEscape */ $mode ?>">
+<div class="block widget block-ces-list <?= $escaper->escapeHtmlAttr($mode); ?>">
+
     <?php if ($block->getHeadingTitle()) : ?>
         <div class="block-title">
-            <strong><?= $escaper->escapeHtml(__($block->getHeadingTitle())) ?></strong>
+            <strong><?= $escaper->escapeHtml($block->getHeadingTitle()); ?></strong>
         </div>
     <?php endif ?>
+
     <div class="block-content">
-        <div class="products-<?= /* @noEscape */ $mode ?> <?= /* @noEscape */ $mode ?>">
-            <ol class="products-items <?= /* @noEscape */ $type ?>">
+        <div class="products-<?= $escaper->escapeHtmlAttr($mode); ?> <?= $escaper->escapeHtmlAttr($mode); ?>">
+            <ol class="products-items <?= $escaper->escapeHtmlAttr($type); ?>">
                 <?php $iterator = 1; ?>
                 <?php foreach ($entities as $entity) : ?>
                     <?php
@@ -40,43 +42,47 @@ $imageHeight = (int)$block->getImageHeight();
                     // not full base url but "media/scoped_eav/entity/IMAGE_FILE.EXTENSION"
                     $imageUrl = $entity->getImageUrl('image');
                     ?>
-                    <?= /* @noEscape */ ($iterator++ == 1) ? '<li class="product-item">' : '</li><li class="product-item">' ?>
-                    <div class="product-item-info">
-                        <a href="<?= $escaper->escapeUrl($customEntityUrl) ?>" class="product-item-photo">
-                            <img src="<?= $escaper->escapeUrl($imageUrl) ?>"
-                                alt="<?= $escaper->escapeHtmlAttr($entity->getName()) ?>"
-                                title="<?= $escaper->escapeHtmlAttr($entity->getName()) ?>"
-                                loading="lazy"
-                                width="<?= $escaper->escapeHtmlAttr($imageWidth) ?>"
-                                height="<?= $escaper->escapeHtmlAttr($imageHeight) ?>"
-                                class="product item photo">
-                        </a>
-                        <div class="product-item-details">
-                            <strong class="product-item-name">
-                                <a href="<?= $escaper->escapeUrl($customEntityUrl) ?>"
-                                    class="product-item-link">
-                                    <?= $escaper->escapeHtml($entity->getName()) ?>
-                                </a>
-                            </strong>
+                    <li class="product-item">
+                        <div class="product-item-info">
 
-                            <div class="product-item-inner">
-                                <div class="product-item-actions">
-                                    <div class="actions-primary">
-                                        <a href="<?= $escaper->escapeUrl($customEntityUrl) ?>"
-                                            class="action"
-                                            title="<?= $escaper->escapeHtmlAttr(__('Discover') . ' ' . $entity->getName()) ?>">
-                                            <?= $escaper->escapeHtml(__('Discover')) ?>
-                                        </a>
+                            <?php if ($imageUrl != null): ?>
+                                <a href="<?= $escaper->escapeUrl($customEntityUrl); ?>" class="product-item-photo">
+                                    <img src="<?= $escaper->escapeUrl($imageUrl); ?>"
+                                        alt="<?= $escaper->escapeHtmlAttr($entity->getName()); ?>"
+                                        title="<?= $escaper->escapeHtmlAttr($entity->getName()); ?>"
+                                        loading="lazy"
+                                        width="<?= $escaper->escapeHtmlAttr($imageWidth); ?>"
+                                        height="<?= $escaper->escapeHtmlAttr($imageHeight); ?>"
+                                        class="product item photo">
+                                </a>
+                            <?php endif; ?>
+
+                            <div class="product-item-details">
+                                <strong class="product-item-name">
+                                    <a href="<?= $escaper->escapeUrl($customEntityUrl); ?>"
+                                        class="product-item-link">
+                                        <?= $escaper->escapeHtml($entity->getName()); ?>
+                                    </a>
+                                </strong>
+
+                                <div class="product-item-inner">
+                                    <div class="product-item-actions">
+                                        <div class="actions-primary">
+                                            <a href="<?= $escaper->escapeUrl($customEntityUrl) ?>"
+                                                class="action"
+                                                title="<?= $escaper->escapeHtmlAttr(__('Discover') . ' ' . $entity->getName()); ?>">
+                                                <?= $escaper->escapeHtml(__('Discover')); ?>
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <?= ($iterator == count($entities) + 1) ? '</li>' : '' ?>
-                <?php endforeach ?>
+                    </li>
+                <?php endforeach; ?>
             </ol>
         </div>
 
-        <?= $block->getPagerHtml() ?>
+        <?= $block->getPagerHtml(); ?>
     </div>
 </div>

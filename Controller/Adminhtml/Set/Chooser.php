@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Controller\Adminhtml\Set;
 
+use Artbambou\SmileCustomEntityWidget\Block\Adminhtml\Set\Chooser as ChooserSet;
 use Magento\Backend\App\Action;
 use Magento\Backend\App\Action\Context;
 use Magento\Framework\Controller\Result\RawFactory;
@@ -25,28 +26,16 @@ class Chooser extends Action
     public const ADMIN_RESOURCE = 'Magento_Widget::widget_instance';
 
     /**
-     * @var RawFactory
-     */
-    protected RawFactory $resultRawFactory;
-
-    /**
-     * @var LayoutFactory
-     */
-    protected LayoutFactory $layoutFactory;
-
-    /**
      * @param Context $context
      * @param RawFactory $resultRawFactory
      * @param LayoutFactory $layoutFactory
      */
     public function __construct(
         Context $context,
-        RawFactory $resultRawFactory,
-        LayoutFactory $layoutFactory
+        protected readonly RawFactory $resultRawFactory,
+        protected readonly LayoutFactory $layoutFactory
     ) {
         parent::__construct($context);
-        $this->resultRawFactory = $resultRawFactory;
-        $this->layoutFactory = $layoutFactory;
     }
 
     /**
@@ -61,7 +50,7 @@ class Chooser extends Action
 
         $layout = $this->layoutFactory->create();
         $customEntitySetGrid = $layout->createBlock(
-            \Artbambou\SmileCustomEntityWidget\Block\Adminhtml\Set\Chooser::class,
+            ChooserSet::class,
             '',
             [
                 'data' => [

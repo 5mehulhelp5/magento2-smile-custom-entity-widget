@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+/**
+ * Artbambou SmileCustomEntityWidget Module
+ *
+ * @category  Artbambou
+ * @package   Artbambou_SmileCustomEntityWidget
+ * @author    Ilan Parmentier
+ * @copyright Copyright (c) 2025 Amadeco
+ * @license   Proprietary License
+ */
+-->
+<layout xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/layout_generic.xsd">
+
+    <container name="root">
+        <block class="Artbambou\SmileCustomEntityWidget\Block\Adminhtml\Entity\Widget\Chooser"
+               name="custom.entity.widget.chooser" />
+    </container>
+
+</layout>
