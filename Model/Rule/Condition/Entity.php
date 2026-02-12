@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
@@ -24,53 +23,84 @@ use Smile\ScopedEav\Api\Data\EntityInterface;
 
 /**
  * Custom Entity Rule Condition.
- *
- * This class handles the validation and filtering logic for Custom Entity attributes
- * within the widget condition tree. It supports standard EAV attributes,
- * special "has_image" checks, and direct "entity_id" selection.
  */
 class Entity extends AbstractCondition implements ResetAfterRequestInterface
+{In alignment with PHP 8.3 strict typing and Magento 2 Coding Standards, here is the corrected implementation including the missing buildFilters logic and the requested English PHPDoc for the specified properties.
+Requirement Analysis
+
+The error Méthode non valide : ...Entity::buildFilters occurs because the Combine class (handling "ANY/OR" logic) expects a buildFilters() method to retrieve raw Filter objects for grouping. The current Entity class applies filters directly to the SearchCriteriaBuilder, which works for "ALL/AND" logic but causes a fatal error during "OR" evaluation.
+Implementation Plan
+
+    Decoupling: Move filter creation logic into a dedicated buildFilters() method.
+
+    Compatibility: Update addToSearchCriteria() to consume buildFilters().
+
+    Documentation: Add English PHPDoc to all properties using strict type hinting.
+
+Implementation
+
+File: app/code/Artbambou/SmileCustomEntityWidget/Model/Rule/Condition/Entity.php
+PHP
+
+<?php
+declare(strict_types=1);
+
+namespace Artbambou\SmileCustomEntityWidget\Model\Rule\Condition;
+
+use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
+use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
+use Magento\Framework\Api\Filter;
+
+/**
+ * Custom Entity Rule Condition model.
+ * * Refactored to support complex "OR" logic via buildFilters.
+ */
+class Entity extends \Magento\Rule\Model\Condition\AbstractCondition
 {
     /**
-     * @var string Form element name for the condition.
+     * The name of the HTML element for the condition parameters.
+     * * @var string
      */
     protected $elementName = 'parameters';
 
     /**
-     * @var array|null Cached operator input types.
+     * Mapping of input types to available operators.
+     * * @var array|null
      */
     protected ?array $_operatorInputByType = null;
 
     /**
-     * @var array Attributes to exclude from the condition list.
+     * List of attribute codes to exclude from the condition selection.
+     * * @var array
      */
     private array $excludeAttributes = [];
 
     /**
-     * @var array Input types that support array values.
+     * Internal tracking of input types that require array-based values.
+     * * @var array
      */
     private array $arrayInputTypes = ['multiselect'];
 
     /**
-     * @var AbstractAttribute|CustomEntityAttribute|null|false Cached attribute object.
+     * Local cache for the loaded EAV attribute object.
+     * * @var AbstractAttribute|CustomEntityAttribute|null|false
      */
     private AbstractAttribute|CustomEntityAttribute|null|false $cachedAttributeObject = false;
 
     /**
-     * @var string|null Cached attribute code.
+     * Local cache for the current attribute code to prevent redundant EAV lookups.
+     * * @var string|null
      */
     private ?string $cachedAttributeCode = null;
 
     /**
-     * Constructor.
-     *
-     * @param Context $context Rule context.
-     * @param BackendHelper $backendHelper Backend helper for URLs.
-     * @param EavConfig $eavConfig EAV configuration.
-     * @param FilterBuilder $filterBuilder Builder for API filters.
-     * @param LoggerInterface $logger Logger for error tracking.
-     * @param AssetRepository $assetRepository Repository for static assets.
-     * @param array $data Additional data.
+     * @param Context $context
+     * @param BackendHelper $backendHelper
+     * @param EavConfig $eavConfig
+     * @param FilterBuilder $filterBuilder
+     * @param LoggerInterface $logger
+     * @param AssetRepository $assetRepository
+     * @param array $data
      */
     public function __construct(
         Context $context,
@@ -85,9 +115,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Retrieve the input type for operators (string, numeric, date, etc.).
-     *
-     * @return array
+     * @inheritdoc
      */
     public function getOperatorInputByType(): array
     {
@@ -95,9 +123,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Define default operators available for each input type.
-     *
-     * @return array
+     * @inheritdoc
      */
     public function getDefaultOperatorInputByType(): array
     {
@@ -117,9 +143,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get available operators as select options.
-     *
-     * @return array
+     * @inheritdoc
      */
     public function getOperatorSelectOptions(): array
     {
@@ -127,9 +151,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get the translated name of the current operator.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getOperatorName(): string
     {
@@ -151,9 +173,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get default operator options based on input type.
-     *
-     * @return array
+     * @inheritdoc
      */
     public function getDefaultOperatorOptions(): array
     {
@@ -185,9 +205,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Render the HTML for the operator selector.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getOperatorElementHtml(): string
     {
@@ -195,27 +213,23 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Configure the operator element with allowed values.
-     *
-     * @return \Magento\Framework\Data\Form\Element\AbstractElement
+     * @inheritdoc
      */
     public function getOperatorElement(): \Magento\Framework\Data\Form\Element\AbstractElement
     {
         $element = parent::getOperatorElement();
         $element->setValues($this->getDefaultOperatorOptions());
-
         return $element;
     }
 
     /**
-     * Retrieve the EAV attribute object for the current condition.
+     * Get attribute object.
      *
      * @return AbstractAttribute|CustomEntityAttribute|null
      */
     public function getAttributeObject(): AbstractAttribute|CustomEntityAttribute|null
     {
         $code = $this->getAttribute();
-
         if (!$code || $code === 'has_image' || $code === 'entity_id') {
             return null;
         }
@@ -237,7 +251,6 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
                 return null;
             }
 
-            // Ensure source models are set for specific input types to prevent errors
             $frontendInput = $attribute->getFrontendInput();
             if ($frontendInput === 'multiselect' && !$attribute->getData('source_model')) {
                 $attribute->setData('source_model', TableSource::class);
@@ -259,11 +272,9 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Load attribute options for the condition dropdown.
+     * Load attribute options.
      *
-     * Filters attributes and adds special attributes like entity_id.
-     *
-     * @return self
+     * @return $this
      */
     public function loadAttributeOptions(): self
     {
@@ -276,7 +287,6 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
         }
 
         $attributes = [];
-        // Add special custom attributes
         $this->addSpecialAttributes($attributes);
 
         foreach ($attributeList as $attribute) {
@@ -294,10 +304,9 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Add special attributes (non-EAV) to the list.
+     * Add special attributes (non-EAV).
      *
      * @param array $attributes
-     * @return void
      */
     private function addSpecialAttributes(array &$attributes): void
     {
@@ -306,10 +315,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get value option by key.
-     *
-     * @param string|null $option
-     * @return mixed
+     * @inheritdoc
      */
     public function getValueOption($option = null)
     {
@@ -329,23 +335,17 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get the human-readable name of the selected value.
-     *
-     * Used for the "Label" in the conditions tree.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getValueName(): string
     {
         $value = $this->getValue();
-
         if ($value === null || $value === '' || $value === false) {
             return '...';
         }
 
         $this->_prepareValueOptions();
         $options = $this->getData('value_option');
-
         if (!is_array($options)) {
             $options = [];
         }
@@ -371,9 +371,9 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Prepare options for select/multiselect attributes.
+     * Prepare value options.
      *
-     * @return self
+     * @return $this
      */
     protected function _prepareValueOptions(): self
     {
@@ -413,7 +413,6 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
                 }
             }
 
-            // Fallback for boolean if no source found
             if (empty($selectOptions) && $attributeObject->getFrontendInput() === 'boolean') {
                 $selectOptions = [
                     ['value' => '', 'label' => ' '],
@@ -429,12 +428,12 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Set the prepared options into the data object.
+     * Set select options.
      *
      * @param array|null $selectOptions
      * @param mixed $selectReady
      * @param mixed $hashedReady
-     * @return self
+     * @return $this
      */
     private function setSelectOptions(?array $selectOptions, mixed $selectReady, mixed $hashedReady): self
     {
@@ -468,18 +467,15 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Determine the input type for the value field.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getInputType(): string
     {
         if ($this->getAttribute() === 'has_image') {
             return 'select';
         }
-
         if ($this->getAttribute() === 'entity_id') {
-            return 'grid'; // Changed to 'grid' to indicate special handling, though acts like string
+            return 'grid';
         }
 
         $attributeObject = $this->getAttributeObject();
@@ -497,16 +493,13 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Determine the element type for rendering.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getValueElementType(): string
     {
         if ($this->getAttribute() === 'has_image') {
             return 'select';
         }
-
         if ($this->getAttribute() === 'entity_id') {
             return 'text';
         }
@@ -525,9 +518,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Get the URL for the chooser popup.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getValueElementChooserUrl(): string
     {
@@ -546,9 +537,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Render the chooser trigger icon after the input element.
-     *
-     * @return string
+     * @inheritdoc
      */
     public function getValueAfterElementHtml(): string
     {
@@ -557,17 +546,13 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
         }
 
         $image = $this->assetRepository->getUrl('images/rule_chooser_trigger.gif');
-
-        // This structure matches what Magento's rules.js expects for a chooser trigger
         return '<a href="javascript:void(0)" class="rule-chooser-trigger">'
             . '<img src="' . $image . '" alt="" class="v-middle rule-chooser-trigger" '
             . 'title="' . __('Open Chooser') . '" /></a>';
     }
 
     /**
-     * Check if the condition requires explicit application (like a grid chooser).
-     *
-     * @return bool
+     * @inheritdoc
      */
     public function getExplicitApply(): bool
     {
@@ -575,7 +560,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Check if the operator supports array values (IN, NOT IN).
+     * Check if operator is array type.
      *
      * @return bool
      */
@@ -586,10 +571,10 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Collect attributes and add them to the search criteria builder.
+     * Collect validated attributes.
      *
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     * @return self
+     * @return $this
      */
     public function collectValidatedAttributes($searchCriteriaBuilder): self
     {
@@ -597,53 +582,75 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Apply the filter to the search criteria.
+     * Apply filters to search criteria builder.
      *
      * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     * @return self
+     * @return $this
      */
     public function addToSearchCriteria(SearchCriteriaBuilder $searchCriteriaBuilder): self
     {
-        $code = $this->getAttribute();
-        if (!$code) {
-            return $this;
-        }
+        $filters = $this->buildFilters();
 
-        if ($code === 'has_image') {
-            return $this->applyHasImageFilter($searchCriteriaBuilder);
-        }
-
-        if ($code === 'entity_id') {
-            return $this->applyEntityIdFilter($searchCriteriaBuilder);
-        }
-
-        $attribute = $this->getAttributeObject();
-        if (!$attribute) {
-            return $this;
-        }
-
-        $value = $this->getValueParsed();
-        $operator = $this->getOperatorType();
-
-        $value = $this->normalizeConditionValue($value, $operator, $attribute);
-
-        if ($value === null || $value === '' || $value === []) {
-            return $this;
-        }
-
-        if ($attribute->getFrontendInput() === 'multiselect') {
-            $this->applyMultiselectFilter($searchCriteriaBuilder, $code, $value, $operator);
-        } else {
-            $this->applyStandardFilter($searchCriteriaBuilder, $code, $value, $operator);
+        // If we have filters, apply them to the builder.
+        // We use addFilter directly to ensure they are added to the current group (AND logic by default).
+        // The Combine class handles OR logic by partitioning filters obtained via buildFilters.
+        foreach ($filters as $filter) {
+            $searchCriteriaBuilder->addFilter(
+                $filter->getField(),
+                $filter->getValue(),
+                $filter->getConditionType()
+            );
         }
 
         return $this;
     }
 
     /**
-     * Parse the value, splitting comma-separated strings for array operators.
+     * Build filters based on the current rule condition.
      *
-     * @return mixed
+     * This method is required by the Combine rule to process "ANY" (OR) aggregators.
+     *
+     * @return Filter[]
+     */
+    public function buildFilters(): array
+    {
+        $code = $this->getAttribute();
+        if (!$code) {
+            return [];
+        }
+
+        if ($code === 'has_image') {
+            return $this->getHasImageFilters();
+        }
+
+        if ($code === 'entity_id') {
+            return $this->getEntityIdFilters();
+        }
+
+        $attribute = $this->getAttributeObject();
+        if (!$attribute) {
+            return [];
+        }
+
+        $value = $this->getValueParsed();
+        $operator = $this->getOperatorType();
+
+        // Normalize value based on operator and attribute type
+        $value = $this->normalizeConditionValue($value, $operator, $attribute);
+
+        if ($value === null || $value === '' || $value === []) {
+            return [];
+        }
+
+        if ($attribute->getFrontendInput() === 'multiselect') {
+            return $this->getMultiselectFilters($code, $value, $operator);
+        }
+
+        return $this->getStandardFilters($code, $value, $operator);
+    }
+
+    /**
+     * @inheritdoc
      */
     public function getValueParsed()
     {
@@ -658,7 +665,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Convert condition operator to API Filter Condition Type.
+     * Get mapped operator type for search criteria.
      *
      * @return string
      */
@@ -681,10 +688,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Validate a model against the condition (used for PHP-side validation).
-     *
-     * @param AbstractModel $model
-     * @return bool
+     * @inheritdoc
      */
     public function validate(AbstractModel $model): bool
     {
@@ -693,7 +697,6 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
             $attributeCode = $attribute->getAttributeCode();
             $attributeValue = $model->getData($attributeCode);
 
-            // Normalize multiselect string values to arrays for validation
             if ($attribute->getFrontendInput() === 'multiselect' && is_string($attributeValue)) {
                 $attributeValue = explode(',', $attributeValue);
                 $model->setData($attributeCode, $attributeValue);
@@ -704,7 +707,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Determine if the 'has_image' check expects a true or false result.
+     * Resolve boolean intent for image check.
      *
      * @return bool
      */
@@ -712,34 +715,34 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     {
         $selectedValue = (bool) (int) $this->getValueParsed();
         $isNegated = $this->getOperator() === '!=';
+
         return $isNegated ? !$selectedValue : $selectedValue;
     }
 
     /**
-     * Apply 'has_image' filter to SearchCriteria.
+     * Get filters for "Has Image" condition.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     * @return self
+     * @return Filter[]
      */
-    private function applyHasImageFilter(SearchCriteriaBuilder $searchCriteriaBuilder): self
+    private function getHasImageFilters(): array
     {
         $entityMustHaveImage = $this->resolveHasImageIntent();
-        $searchCriteriaBuilder->addFilter(
-            EntityInterface::IMAGE,
-            'true',
-            $entityMustHaveImage ? 'notnull' : 'null'
-        );
 
-        return $this;
+        return [
+            $this->filterBuilder
+                ->setField(EntityInterface::IMAGE)
+                ->setValue('true')
+                ->setConditionType($entityMustHaveImage ? 'notnull' : 'null')
+                ->create()
+        ];
     }
 
     /**
-     * Apply 'entity_id' filter to SearchCriteria.
+     * Get filters for Entity ID condition.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     * @return self
+     * @return Filter[]
      */
-    private function applyEntityIdFilter(SearchCriteriaBuilder $searchCriteriaBuilder): self
+    private function getEntityIdFilters(): array
     {
         $value = $this->getValueParsed();
         $operator = $this->getOperatorType();
@@ -749,10 +752,9 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
         }
 
         if (empty($value)) {
-            return $this;
+            return [];
         }
 
-        // Force 'in' or 'nin' for entity ID arrays if operator is simple equality
         if ($operator === 'eq') {
             $operator = 'in';
         }
@@ -760,27 +762,22 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
             $operator = 'nin';
         }
 
-        $this->applyStandardFilter($searchCriteriaBuilder, 'entity_id', $value, $operator);
-        return $this;
+        return $this->getStandardFilters('entity_id', $value, $operator);
     }
 
     /**
-     * Apply filters for multiselect attributes.
+     * Get filters for Multiselect attributes.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param string $code
      * @param mixed $value
      * @param string $operator
-     * @return void
+     * @return Filter[]
      */
-    private function applyMultiselectFilter(
-        SearchCriteriaBuilder $searchCriteriaBuilder,
-        string $code,
-        mixed $value,
-        string $operator
-    ): void {
+    private function getMultiselectFilters(string $code, mixed $value, string $operator): array
+    {
+        $filters = [];
+
         if ($operator === 'in' && is_array($value)) {
-            $filters = [];
             foreach ($value as $item) {
                 $filters[] = $this->filterBuilder
                     ->setField($code)
@@ -788,17 +785,18 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
                     ->setValue($item)
                     ->create();
             }
-            if (!empty($filters)) {
-                $searchCriteriaBuilder->addFilters($filters);
-            }
-            return;
+            return $filters;
         }
 
         if ($operator === 'nin' && is_array($value)) {
             foreach ($value as $item) {
-                $searchCriteriaBuilder->addFilter($code, $item, 'nfinset');
+                $filters[] = $this->filterBuilder
+                    ->setField($code)
+                    ->setConditionType('nfinset')
+                    ->setValue($item)
+                    ->create();
             }
-            return;
+            return $filters;
         }
 
         $conditionType = match ($operator) {
@@ -807,34 +805,41 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
             default => $operator,
         };
 
-        $searchCriteriaBuilder->addFilter($code, $value, $conditionType);
+        $filters[] = $this->filterBuilder
+            ->setField($code)
+            ->setValue($value)
+            ->setConditionType($conditionType)
+            ->create();
+
+        return $filters;
     }
 
     /**
-     * Apply standard scalar filters.
+     * Get standard filters.
      *
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
      * @param string $code
      * @param mixed $value
      * @param string $operator
-     * @return void
+     * @return Filter[]
      */
-    private function applyStandardFilter(
-        SearchCriteriaBuilder $searchCriteriaBuilder,
-        string $code,
-        mixed $value,
-        string $operator
-    ): void {
+    private function getStandardFilters(string $code, mixed $value, string $operator): array
+    {
         if (in_array($operator, ['like', 'nlike']) && is_string($value)) {
             $value = str_replace(['%', '_'], ['\\%', '\\_'], $value);
             $value = '%' . $value . '%';
         }
 
-        $searchCriteriaBuilder->addFilter($code, $value, $operator);
+        return [
+            $this->filterBuilder
+                ->setField($code)
+                ->setValue($value)
+                ->setConditionType($operator)
+                ->create()
+        ];
     }
 
     /**
-     * Normalize values based on operator and attribute type.
+     * Normalize condition value.
      *
      * @param mixed $value
      * @param string $operator
@@ -857,7 +862,6 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
             }
         }
 
-        // For non-array operators, ensure we have a scalar
         if (is_array($value) && !in_array($operator, ['in', 'nin'])) {
             $value = reset($value);
         }
@@ -875,9 +879,7 @@ class Entity extends AbstractCondition implements ResetAfterRequestInterface
     }
 
     /**
-     * Reset state after request to prevent data leakage in loop contexts.
-     *
-     * @return void
+     * @inheritdoc
      */
     public function _resetState(): void
     {
