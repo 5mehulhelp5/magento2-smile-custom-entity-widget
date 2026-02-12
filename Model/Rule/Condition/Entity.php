@@ -21,7 +21,6 @@ use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Model\CustomEntity\Attribute as CustomEntityAttribute;
 use Smile\ScopedEav\Api\Data\EntityInterface;
 
-
 /**
  * Custom Entity Rule Condition model.
  * Refactored to support complex "OR" logic via buildFilters.
