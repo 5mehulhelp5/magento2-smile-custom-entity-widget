@@ -10,14 +10,14 @@ declare(strict_types=1);
 
 namespace Artbambou\SmileCustomEntityWidget\Block\Set\Widget;
 
+use Artbambou\SmileCustomEntityWidget\Model\Rule;
 use Magento\Backend\Block\Template;
 use Magento\Backend\Block\Template\Context;
-use Magento\Framework\Registry;
 use Magento\Framework\Data\Form\Element\AbstractElement;
 use Magento\Framework\Data\Form\Element\Factory as ElementFactory;
 use Magento\Framework\Data\Form\Element\Renderer\RendererInterface;
-use Magento\Rule\Block\Conditions as RuleConditions; // Alias for clarity
-use Artbambou\SmileCustomEntityWidget\Model\Rule;
+use Magento\Framework\Registry;
+use Magento\Rule\Block\Conditions as RuleConditions;
 
 /**
  * Entity Chooser for Smile Custom Entity
@@ -30,26 +30,6 @@ class Conditions extends Template implements RendererInterface
      * @var string
      */
     protected $_template = 'Artbambou_SmileCustomEntityWidget::widget/conditions.phtml';
-
-    /**
-     * @var RuleConditions
-     */
-    protected $conditions;
-
-    /**
-     * @var Rule
-     */
-    protected $rule;
-
-    /**
-     * @var ElementFactory
-     */
-    protected $elementFactory;
-
-    /**
-     * @var Registry
-     */
-    protected $registry;
 
     /**
      * The element being rendered by this block
@@ -75,16 +55,12 @@ class Conditions extends Template implements RendererInterface
      */
     public function __construct(
         Context $context,
-        ElementFactory $elementFactory,
-        RuleConditions $conditions,
-        Rule $rule,
-        Registry $registry,
+        protected readonly Rule $rule,
+        protected readonly ElementFactory $elementFactory,
+        protected readonly RuleConditions $conditions,
+        protected readonly Registry $registry,
         array $data = []
     ) {
-        $this->elementFactory = $elementFactory;
-        $this->conditions = $conditions;
-        $this->rule = $rule;
-        $this->registry = $registry;
         parent::__construct($context, $data);
     }
 
@@ -112,7 +88,10 @@ class Conditions extends Template implements RendererInterface
     public function render(AbstractElement $element)
     {
         $this->element = $element;
-        $this->rule->getConditions()->setJsFormObject($this->getHtmlId());
+
+        $conditions = $this->rule->getConditions();
+        $conditions->setJsFormObject($this->getHtmlId());
+
         return $this->toHtml();
     }
 

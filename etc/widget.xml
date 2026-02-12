@@ -91,9 +91,6 @@
 			</parameter>
             <parameter name="template" xsi:type="select" required="true" visible="true">
                 <label translate="true">Template</label>
-                <depends>
-                    <parameter name="show_pager" value="0" />
-                </depends>
                 <options>
                     <option name="grid" value="Artbambou_SmileCustomEntityWidget::widget/grid.phtml" selected="true">
                         <label translate="true">Grid Template</label>

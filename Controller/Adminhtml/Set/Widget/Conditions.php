@@ -48,29 +48,29 @@ class Conditions extends Widget
         $id = $this->getRequest()->getParam('id');
         $typeData = explode('|', str_replace('-', '/', $this->getRequest()->getParam('type', '')));
         $className = $typeData[0];
-    
+
         // Validate the class is a legitimate condition
         if (!is_a($className, AbstractCondition::class, true)) {
             $this->getResponse()->setBody('');
             return;
         }
-    
+
         $rule = $this->ruleFactory->create();
         $model = $this->_objectManager->create($className)
             ->setId($id)
             ->setType($className)
             ->setRule($rule)
             ->setPrefix('conditions');
-    
+
         if (!empty($typeData[1])) {
             $model->setAttribute($typeData[1]);
         }
-    
+
         if ($model instanceof AbstractCondition) {
             $model->setJsFormObject($this->getRequest()->getParam('form'));
             $result = $model->asHtmlRecursive();
         }
-    
+
         $this->getResponse()->setBody($result ?? '');
     }
 }

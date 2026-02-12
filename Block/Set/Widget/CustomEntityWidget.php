@@ -12,6 +12,7 @@ namespace Artbambou\SmileCustomEntityWidget\Block\Set\Widget;
 
 use Artbambou\SmileCustomEntityWidget\Model\Config\Source\SortBy;
 use Artbambou\SmileCustomEntityWidget\Model\Rule;
+use Artbambou\SmileCustomEntityWidget\Model\RuleFactory;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Eav\Api\AttributeSetRepositoryInterface;
 use Magento\Eav\Api\Data\AttributeSetInterface;
@@ -29,6 +30,7 @@ use Smile\CustomEntity\Api\Data\CustomEntityAttributeInterface;
 use Smile\CustomEntity\Block\CustomEntity\ImageFactory;
 use Smile\CustomEntity\Block\Html\Pager;
 use Smile\CustomEntity\Model\CustomEntity;
+use Smile\ScopedEav\Api\Data\EntityInterface;
 
 /**
  * Custom Entity Widget Block.
@@ -98,7 +100,7 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
      * @param EavConfig $eavConfig
      * @param SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory
      * @param SortOrderBuilder $sortOrderBuilder
-     * @param Rule $rule
+     * @param RuleFactory $ruleFactory
      * @param Conditions $conditionsHelper
      * @param ImageFactory $imageFactory
      * @param Json $serializer
@@ -111,7 +113,7 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
         private readonly EavConfig $eavConfig,
         private readonly SearchCriteriaBuilderFactory $searchCriteriaBuilderFactory,
         private readonly SortOrderBuilder $sortOrderBuilder,
-        private readonly Rule $rule,
+        private readonly RuleFactory $ruleFactory,
         private readonly Conditions $conditionsHelper,
         private readonly ImageFactory $imageFactory,
         private readonly Json $serializer,
@@ -140,35 +142,65 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     /**
      * Get key pieces for caching block content.
      *
+     * Generates a unique cache key based on all widget configuration parameters
+     * that affect rendering output: store, theme, display settings, pagination,
+     * conditions, and template.
+     *
      * @return array<int, string|int|null>
      * @SuppressWarnings(PHPMD.RequestAwareBlockMethod)
      */
     public function getCacheKeyInfo(): array
     {
-        $conditions = $this->getData('conditions')
-            ? $this->getData('conditions')
-            : $this->getData('conditions_encoded');
-
-        if (is_array($conditions)) {
-            $conditions = $this->serializer->serialize($conditions);
-        }
-
         return [
             'AB_CUSTOM_ENTITY_WIDGET',
             $this->_storeManager->getStore()->getId(),
             $this->_design->getDesignTheme()->getId(),
+            $this->getTemplate(),
+            $this->getData(EntityInterface::ATTRIBUTE_SET_ID),
+            $this->getSerializedConditions(),
+            $this->getItemsCount(),
+            $this->getItemsPerPage(),
             $this->getImageWidth(),
             $this->getImageHeight(),
             $this->canShowFooterButton(),
-            (int) $this->getRequest()->getParam($this->getPageVarName(), 1),
-            $this->getItemsPerPage(),
-            $this->getItemsCount(),
-            $conditions,
-            $this->serializer->serialize([
-                $this->getPageVarName() => $this->getRequest()->getParam($this->getPageVarName())
-            ]),
-            $this->getTemplate(),
+            $this->getSortBy(),
+            $this->getSortDirection(),
+            $this->getCurrentPage(),
         ];
+    }
+
+    /**
+     * Retrieve the current page number from the request.
+     *
+     * @return int
+     * @SuppressWarnings(PHPMD.RequestAwareBlockMethod)
+     */
+    private function getCurrentPage(): int
+    {
+        return (int) $this->getRequest()->getParam($this->getPageVarName(), 1);
+    }
+
+    /**
+     * Retrieve widget conditions as a string suitable for cache key inclusion.
+     *
+     * Handles both encoded (string) and decoded (array) condition formats.
+     * Always returns a string to ensure deterministic cache key generation.
+     *
+     * @return string
+     */
+    private function getSerializedConditions(): string
+    {
+        $conditions = $this->getData('conditions_encoded') ?? $this->getData('conditions');
+
+        if ($conditions === null) {
+            return '';
+        }
+
+        if (is_array($conditions)) {
+            return $this->serializer->serialize($conditions);
+        }
+
+        return (string) $conditions;
     }
 
     /**
@@ -191,56 +223,59 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
      * Builds a SearchCriteria from widget parameters (attribute set, conditions,
      * sort order) and queries the repository. Handles pagination when enabled.
      *
+     * Returns an empty array if the configured attribute set cannot be resolved.
+     *
      * @return \Smile\CustomEntity\Api\Data\CustomEntityInterface[]
      */
     public function getEntities(): array
     {
-        if ($this->entities !== null) {
-            return $this->entities;
-        }
-        
-        $attributeSet = $this->getAttributeSet();
-        if ($attributeSet === null) {
-            $this->entities = [];
-            return $this->entities;
-        }
+        if ($this->entities === null) {
+            $attributeSet = $this->getAttributeSet();
 
-        /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
-        $searchCriteriaBuilder = $this->searchCriteriaBuilderFactory->create();
+            if ($attributeSet === null) {
+                $this->entities = [];
+                return $this->entities;
+            }
 
-        $searchCriteriaBuilder->addFilter(
-            'attribute_set_id',
-            $attributeSet->getAttributeSetId()
-        );
+            /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
+            $searchCriteriaBuilder = $this->searchCriteriaBuilderFactory->create();
 
-        $searchCriteriaBuilder->addFilter('is_active', true);
+            $searchCriteriaBuilder->addFilter(
+                EntityInterface::ATTRIBUTE_SET_ID,
+                $attributeSet->getAttributeSetId()
+            );
 
-        $conditions = $this->getConditions();
-        $conditions->collectValidatedAttributes($searchCriteriaBuilder);
+            $searchCriteriaBuilder->addFilter(EntityInterface::IS_ACTIVE, true);
 
-        $sortOrder = $this->sortOrderBuilder
-            ->setField($this->getSortBy())
-            ->setDirection($this->getSortDirection())
-            ->create();
-        $searchCriteriaBuilder->setSortOrders([$sortOrder]);
+            $conditions = $this->getConditions();
+            $conditions->collectValidatedAttributes($searchCriteriaBuilder);
 
-        if ($this->showPager()) {
-            $pager = $this->getPager();
+            $sortOrder = $this->sortOrderBuilder
+                ->setField($this->getSortBy())
+                ->setDirection($this->getSortDirection())
+                ->create();
+            $searchCriteriaBuilder->setSortOrders([$sortOrder]);
 
-            if ($pager !== null) {
-                $pager->addCriteria($searchCriteriaBuilder);
-                $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
-                $pager->setSearchResult($searchResult);
+            if ($this->showPager()) {
+                $pager = $this->getPager();
+
+                if ($pager !== null) {
+                    $pager->addCriteria($searchCriteriaBuilder);
+                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+                    $pager->setSearchResult($searchResult);
+                } else {
+                    $searchCriteriaBuilder->setPageSize($this->getItemsCount());
+                    $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+                }
             } else {
                 $searchCriteriaBuilder->setPageSize($this->getItemsCount());
                 $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
             }
-        } else {
-            $searchCriteriaBuilder->setPageSize($this->getItemsCount());
-            $searchResult = $this->customEntityRepository->getList($searchCriteriaBuilder->create());
+
+            $this->entities = $searchResult->getItems();
         }
 
-        $this->entities = $searchResult->getItems();
+        return $this->entities;
     }
 
     /**
@@ -254,12 +289,12 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
     public function getAttributeSet(): ?AttributeSetInterface
     {
         if ($this->attributeSet === null) {
-            if ($this->hasData('attribute_set_id')) {
-                $attributeSetId = (int) $this->getData('attribute_set_id');
+            if ($this->hasData(EntityInterface::ATTRIBUTE_SET_ID)) {
+                $attributeSetId = (int) $this->getData(EntityInterface::ATTRIBUTE_SET_ID);
             } else {
                 $attributeSetId = $this->getDefaultAttributeSetId();
             }
-    
+
             try {
                 $this->attributeSet = $this->attributeSetRepository->get($attributeSetId);
             } catch (NoSuchEntityException $e) {
@@ -269,16 +304,16 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
                         $attributeSetId
                     )
                 );
-    
+
                 $defaultId = $this->getDefaultAttributeSetId();
-    
+
                 if ($defaultId === $attributeSetId) {
                     $this->_logger->error(
                         'CustomEntityWidget: Default attribute set could not be loaded. Widget will render empty.'
                     );
                     return null;
                 }
-    
+
                 try {
                     $this->attributeSet = $this->attributeSetRepository->get($defaultId);
                 } catch (NoSuchEntityException $e) {
@@ -292,10 +327,10 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
                 }
             }
         }
-    
+
         return $this->attributeSet;
     }
-    
+
     /**
      * Retrieve the default attribute set ID for the custom entity type.
      *
@@ -306,7 +341,7 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
         $entityType = $this->eavConfig->getEntityType(
             CustomEntityAttributeInterface::ENTITY_TYPE_CODE
         );
-    
+
         return (int) $entityType->getDefaultAttributeSetId();
     }
 
@@ -325,7 +360,7 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
             return '';
         }
 
-        $customEntity = end($entities);
+        $customEntity = reset($entities);
 
         return $this->_urlBuilder->getDirectUrl($customEntity->getAttributeSetUrlKey());
     }
@@ -466,7 +501,7 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
         $sortBy = $this->getData('sort_by');
 
         if (!in_array($sortBy, array_keys(SortBy::toArray()))) {
-            $sortBy = 'name';
+            $sortBy = EntityInterface::NAME;
         }
 
         return $sortBy;
@@ -539,27 +574,27 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
      *
      * @return string|\Magento\Framework\Phrase
      */
-    public function getTextFooterButton(): string|\Magento\Framework\Phrase
+    public function getTextFooterButton(): ?string
     {
-        if ($this->hasData('text_footer_button') && $this->getData('text_footer_button')) {
+        if ($this->hasData('text_footer_button')) {
             return $this->getData('text_footer_button');
         }
 
-        return __('Discover');
+        return (string) __('Discover');
     }
 
     /**
      * Get the footer button title attribute.
      *
-     * @return string|false
+     * @return string|null
      */
-    public function getTitleFooterButton(): string|false
+    public function getTitleFooterButton(): ?string
     {
-        if ($this->hasData('title_footer_button') && $this->getData('title_footer_button')) {
-            return (string) $this->getData('title_footer_button');
+        if ($this->hasData('title_footer_button')) {
+            return $this->getData('title_footer_button');
         }
 
-        return false;
+        return null;
     }
 
     /**
@@ -577,9 +612,10 @@ class CustomEntityWidget extends Template implements BlockInterface, IdentityInt
             $conditions = $this->decodeConditions($conditions);
         }
 
-        $this->rule->loadPost(['conditions' => $conditions]);
+        $ruleInstance = $this->ruleFactory->create();
+        $ruleInstance->loadPost(['conditions' => $conditions]);
 
-        return $this->rule->getConditions();
+        return $ruleInstance->getConditions();
     }
 
     /**

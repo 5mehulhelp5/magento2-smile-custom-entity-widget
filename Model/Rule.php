@@ -23,11 +23,6 @@ use Magento\Rule\Model\AbstractModel as RuleAbstractModel;
 class Rule extends RuleAbstractModel
 {
     /**
-     * @var \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\CombineFactory
-     */
-    protected $conditionsFactory;
-
-    /**
      * Rule constructor
      *
      * @param \Magento\Framework\Model\Context $context
@@ -50,12 +45,12 @@ class Rule extends RuleAbstractModel
         \Magento\Framework\Data\FormFactory $formFactory,
         \Magento\Framework\Stdlib\DateTime\TimezoneInterface $localeDate,
         \Artbambou\SmileCustomEntityWidget\Model\Rule\Condition\CombineFactory $conditionsFactory,
-        \Magento\Framework\Model\ResourceModel\AbstractResource $resource = null,
-        \Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null,
+        ?\Magento\Framework\Model\ResourceModel\AbstractResource $resource = null,
+        ?\Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null,
         array $data = [],
-        ExtensionAttributesFactory $extensionFactory = null,
-        AttributeValueFactory $customAttributeFactory = null,
-        \Magento\Framework\Serialize\Serializer\Json $serializer = null
+        ?ExtensionAttributesFactory $extensionFactory = null,
+        ?AttributeValueFactory $customAttributeFactory = null,
+        ?\Magento\Framework\Serialize\Serializer\Json $serializer = null
     ) {
         $this->conditionsFactory = $conditionsFactory;
         parent::__construct(
